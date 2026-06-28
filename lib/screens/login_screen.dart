@@ -1,0 +1,285 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../core/constants.dart';
+import '../providers/auth_provider.dart';
+import 'register_screen.dart';
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  late TextEditingController _emailController;
+  late TextEditingController _passwordController;
+  bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Header with gradient
+            Container(
+              height: 250,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [primaryColor, primaryColor.withOpacity(0.7)],
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.shopping_bag,
+                      size: 60,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'دار البراق',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'تسجيل الدخول إلى حسابك',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Login form
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Consumer<AuthProvider>(
+                builder: (context, authProvider, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Error message
+                      if (authProvider.error != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red.shade600),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  authProvider.error!,
+                                  style: TextStyle(
+                                    color: Colors.red.shade600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.close, color: Colors.red.shade600),
+                                onPressed: authProvider.clearError,
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (authProvider.error != null) const SizedBox(height: 16),
+                      // Email field
+                      TextField(
+                        controller: _emailController,
+                        enabled: !authProvider.isLoading,
+                        decoration: InputDecoration(
+                          hintText: 'البريد الإلكتروني',
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      // Password field
+                      TextField(
+                        controller: _passwordController,
+                        enabled: !authProvider.isLoading,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          hintText: 'كلمة المرور',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Login button
+                      ElevatedButton(
+                        onPressed: authProvider.isLoading
+                            ? null
+                            : () async {
+                                final success = await authProvider.login(
+                                  _emailController.text,
+                                  _passwordController.text,
+                                );
+                                if (success && mounted) {
+                                  // Navigation will be handled by main.dart
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم تسجيل الدخول بنجاح'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: authProvider.isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'تسجيل الدخول',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Divider
+                      Row(
+                        children: [
+                          Expanded(child: Container(height: 1, color: Colors.grey[300])),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'أو',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ),
+                          Expanded(child: Container(height: 1, color: Colors.grey[300])),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Guest login button
+                      OutlinedButton(
+                        onPressed: authProvider.isLoading ? null : () {
+                          Navigator.of(context).pop();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: primaryColor, width: 2),
+                        ),
+                        child: Text(
+                          'متابعة كزائر',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Signup link
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'ليس لديك حساب؟ ',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const RegisterScreen(),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              'أنشئ حساباً',
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
