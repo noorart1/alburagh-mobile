@@ -10,10 +10,19 @@ class Category {
   });
 
   factory Category.fromJson(Map<String, dynamic> json) {
+    final imageValue = json['image'];
+    String imageUrl = '';
+
+    if (imageValue is String && imageValue.isNotEmpty) {
+      imageUrl = imageValue;
+    } else if (imageValue is Map) {
+      imageUrl = imageValue['src']?.toString() ?? '';
+    }
+
     return Category(
-      id: json['id'],
-      name: json['name'],
-      imageUrl: json['image'] != null ? json['image']['src'] : '',
+      id: json['id'] ?? 0,
+      name: json['name']?.toString() ?? '',
+      imageUrl: imageUrl,
     );
   }
 }

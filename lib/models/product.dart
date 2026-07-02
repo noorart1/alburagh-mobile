@@ -27,14 +27,19 @@ class Product {
             .toList()
         : <String>[];
 
+    final description = (json['short_description'] ?? json['description'] ?? '')
+        .toString();
+
     return Product(
-      id: json['id'],
-      name: json['name'],
-      price: json['price'] ?? '0',
-      regularPrice: json['regular_price'] ?? '0',
+      id: json['id'] is int
+          ? json['id'] as int
+          : int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      name: json['name']?.toString() ?? '',
+      price: (json['price'] ?? '0').toString(),
+      regularPrice: (json['regular_price'] ?? '0').toString(),
       imageUrl: images.isNotEmpty ? images.first : '',
       imageUrls: images,
-      description: StringUtils.stripHtmlTags(json['short_description'] ?? ''),
+      description: StringUtils.stripHtmlTags(description),
     );
   }
 }

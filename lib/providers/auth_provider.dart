@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,19 +37,38 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String identifier, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await _api.loginWithJwt(
-        username: email,
-        password: password,
-      );
+      Map<String, dynamic> response;
 
-      final token = response['token'] as String?;
-      final userId = response['user_id'] as int?;
+      try {
+        response = await _api.loginWithAlburaghApi(
+          username: identifier,
+          password: password,
+        );
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) {
+          rethrow;
+        }
+        response = await _loginWithJwtFallback(identifier, password);
+      }
+
+      final authData = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'])
+          : response;
+      final token = authData['token']?.toString();
+      final alburaghUser = authData['user'] is Map
+          ? Map<String, dynamic>.from(authData['user'])
+          : null;
+      var userId = _parseUserId(alburaghUser?['id']);
+
+      if (token != null) {
+        userId ??= _userIdFromJwt(token);
+      }
 
       if (token == null || userId == null) {
         _error = 'فشل تسجيل الدخول';
@@ -56,23 +77,25 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      final customer = await _api.getCustomer(userId);
-      final name = (customer['first_name'] ?? '').toString().isNotEmpty
-          ? customer['first_name']
-          : response['user_display_name'] ?? email.split('@')[0];
+      final responseEmail = authData['user_email']?.toString() ??
+          alburaghUser?['email']?.toString() ??
+          identifier;
+      final displayName = authData['user_display_name']?.toString() ??
+          [alburaghUser?['first_name'], alburaghUser?['last_name']]
+              .whereType<String>()
+              .where((value) => value.isNotEmpty)
+              .join(' ')
+              .trim();
+      final name = displayName.isNotEmpty ? displayName : identifier.split('@')[0];
+      final userEmail = responseEmail.isNotEmpty ? responseEmail : identifier;
 
-      _user = User(
-        id: userId,
-        email: email,
-        name: name,
-        token: token,
-      );
+      _user = User(id: userId, email: userEmail, name: name, token: token);
       _isLoggedIn = true;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', token);
       await prefs.setInt('user_id', userId);
-      await prefs.setString('user_email', email);
+      await prefs.setString('user_email', userEmail);
       await prefs.setString('user_name', name);
 
       _isLoading = false;
@@ -82,7 +105,8 @@ class AuthProvider extends ChangeNotifier {
       if (e.response?.statusCode == 403) {
         _error = 'اسم المستخدم أو كلمة المرور غير صحيحة';
       } else if (e.response?.statusCode == 404) {
-        _error = 'خدمة تسجيل الدخول غير متاحة. تأكد من تفعيل إضافة JWT Authentication';
+        _error =
+            'خدمة تسجيل الدخول غير متاحة. تأكد من تفعيل إضافة JWT Authentication';
       } else {
         _error = e.response?.data?['message'] ?? 'خطأ في الاتصال بالخادم';
       }
@@ -95,6 +119,70 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<Map<String, dynamic>> _loginWithJwtFallback(
+    String identifier,
+    String password,
+  ) async {
+    try {
+      return await _api.loginWithJwt(username: identifier, password: password);
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 403) {
+        rethrow;
+      }
+
+      if (!identifier.contains('@')) {
+        rethrow;
+      }
+
+      final customer = await _api.getCustomerByEmail(identifier);
+      final username = customer?['username']?.toString();
+
+      if (username == null || username.isEmpty || username == identifier) {
+        rethrow;
+      }
+
+      return _api.loginWithJwt(username: username, password: password);
+    }
+  }
+
+  int? _parseUserId(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  int? _userIdFromJwt(String token) {
+    final parts = token.split('.');
+
+    if (parts.length != 3) {
+      return null;
+    }
+
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+
+      if (payload is! Map<String, dynamic>) {
+        return null;
+      }
+
+      final id = payload['sub'] ?? payload['data']?['user']?['id'];
+
+      if (id is int) {
+        return id;
+      }
+
+      if (id is String) {
+        return int.tryParse(id);
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
   }
 
   Future<bool> register({

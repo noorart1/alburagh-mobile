@@ -17,13 +17,16 @@ class CartScreen extends StatelessWidget {
               itemCount: cart.items.length,
               itemBuilder: (context, index) {
                 final product = cart.items[index];
-                return ListTile(
-                  leading: const Icon(Icons.book),
-                  title: Text(product.name),
-                  subtitle: Text('${product.price} دولار'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => cart.removeFromCart(product),
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: ListTile(
+                    leading: const Icon(Icons.book),
+                    title: Text(product.name),
+                    subtitle: Text('${product.price} دولار'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => cart.removeFromCart(product),
+                    ),
                   ),
                 );
               },

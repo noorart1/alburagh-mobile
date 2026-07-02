@@ -2,7 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/constants.dart';
 import '../providers/auth_provider.dart';
+import 'main_screen.dart';
 import 'register_screen.dart';
+
+String? validateUsernameOrEmail(String? value) {
+  final normalized = value?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return 'الرجاء إدخال اسم المستخدم أو البريد الإلكتروني';
+  }
+  return null;
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late TextEditingController _emailController;
   late TextEditingController _passwordController;
   bool _obscurePassword = true;
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -81,7 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.all(24.0),
               child: Consumer<AuthProvider>(
                 builder: (context, authProvider, _) {
-                  return Column(
+                  return Form(
+                    key: _formKey,
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // Error message
@@ -115,11 +127,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       if (authProvider.error != null) const SizedBox(height: 16),
                       // Email field
-                      TextField(
+                      TextFormField(
                         controller: _emailController,
                         enabled: !authProvider.isLoading,
                         decoration: InputDecoration(
-                          hintText: 'البريد الإلكتروني',
+                          hintText: 'اسم المستخدم أو البريد الإلكتروني',
                           prefixIcon: const Icon(Icons.email_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -130,10 +142,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        validator: validateUsernameOrEmail,
                       ),
                       const SizedBox(height: 16),
                       // Password field
-                      TextField(
+                      TextFormField(
                         controller: _passwordController,
                         enabled: !authProvider.isLoading,
                         obscureText: _obscurePassword,
@@ -160,6 +174,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             vertical: 14,
                           ),
                         ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'الرجاء إدخال كلمة المرور';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 24),
                       // Login button
@@ -167,17 +187,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: authProvider.isLoading
                             ? null
                             : () async {
+                                if (!_formKey.currentState!.validate()) return;
                                 final success = await authProvider.login(
                                   _emailController.text,
                                   _passwordController.text,
                                 );
-                                if (success && mounted) {
-                                  // Navigation will be handled by main.dart
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('تم تسجيل الدخول بنجاح'),
-                                      duration: Duration(seconds: 2),
+                                if (!context.mounted) return;
+                                if (success) {
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(
+                                      builder: (context) => const MainScreen(),
                                     ),
+                                    (route) => false,
                                   );
                                 }
                               },
@@ -226,7 +247,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Guest login button
                       OutlinedButton(
                         onPressed: authProvider.isLoading ? null : () {
-                          Navigator.of(context).pop();
+                          // کاربر را به صفحه اصلی هدایت می‌کنیم
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (context) => const MainScreen(),
+                            ),
+                          );
                         },
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -273,6 +299,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ],
+                    ),
                   );
                 },
               ),

@@ -25,13 +25,16 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
 
   Future<void> loadCategories() async {
     try {
+      if (!mounted) return;
       setState(() => isLoading = true);
       final catData = await _api.getCategories();
+      if (!mounted) return;
       setState(() {
         categories = catData.map((c) => Category.fromJson(c)).toList();
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -32,16 +32,19 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   Future<void> loadProducts() async {
     try {
+      if (!mounted) return;
       setState(() => isLoading = true);
       final prodData = await _api.getProducts(
         category: widget.category.id.toString(),
       );
+      if (!mounted) return;
       setState(() {
         products = prodData.map((p) => Product.fromJson(p)).toList();
         _applyFiltersAndSort();
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
