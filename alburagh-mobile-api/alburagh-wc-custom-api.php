@@ -2,8 +2,7 @@
 /**
 * Plugin Name: AlBuragh WooCommerce Custom REST API
 * Description: Fully production-ready custom REST API endpoint wrapper for AlBuragh online store.
-* Exposes secure JWT authentication, products catalogs, custom address adjustments, cart utilities,
-* reviews, coupon validators, and checkout engines.
+* Exposes secure JWT authentication, products catalogs, custom address adjustments, cart utilities, reviews, coupon validators, and checkout engines.
 * Version: 1.1.0
 * Author: AlBuragh Developer Core
 * Namespace: /wp-json/alburagh/v1/
@@ -176,26 +175,64 @@ return new WP_REST_Response(array(
 }
 
 public function get_profile($request) {
-$auth_header = $request->get_header('Authorization');
-if (empty($auth_header)) {
-return new WP_Error('unauthorized', 'Token missing.', array('status' => 401));
-}
+    $auth_header = $request->get_header('Authorization');
+    if (empty($auth_header)) {
+        return new WP_Error('unauthorized', 'Token missing.', array('status' => 401));
+    }
 
-$token = str_replace('Bearer ', '', $auth_header);
-$user_id = AlBuragh_JWT_Auth::validate_token($token);
+    $token = str_replace('Bearer ', '', $auth_header);
+    $user_id = AlBuragh_JWT_Auth::validate_token($token);
 
-if (!$user_id) {
-return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
-}
+    if (!$user_id) {
+        return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
+    }
 
-$user = get_user_by('id', $user_id);
-return new WP_REST_Response(array(
-'id' => $user->ID,
-'username' => $user->user_login,
-'email' => $user->user_email,
-'first_name' => get_user_meta($user->ID, 'first_name', true),
-'last_name' => get_user_meta($user->ID, 'last_name', true)
-), 200);
+    $user = get_user_by('id', $user_id);
+    if (!$user) {
+        return new WP_Error('invalid_user', 'User not found', array('status' => 404));
+    }
+
+    // Basic user info
+    $profile = [
+        'id' => $user->ID,
+        'email' => $user->user_email,
+        'first_name' => $user->first_name,
+        'last_name' => $user->last_name,
+        'phone' => get_user_meta($user_id, 'billing_phone', true),
+    ];
+
+    // Billing address
+    $billing = [
+        'first_name' => $user->first_name,
+        'last_name' => $user->last_name,
+        'address_1' => get_user_meta($user_id, 'billing_address_1', true),
+        'address_2' => get_user_meta($user_id, 'billing_address_2', true),
+        'city' => get_user_meta($user_id, 'billing_city', true),
+        'state' => get_user_meta($user_id, 'billing_state', true),
+        'postcode' => get_user_meta($user_id, 'billing_postcode', true),
+        'country' => get_user_meta($user_id, 'billing_country', true),
+        'phone' => get_user_meta($user_id, 'billing_phone', true),
+        'type' => 'billing',
+    ];
+
+    // Shipping address
+    $shipping = [
+        'first_name' => $user->first_name, // WooCommerce often uses billing first name for shipping if not set
+        'last_name' => $user->last_name,  // WooCommerce often uses billing last name for shipping if not set
+        'address_1' => get_user_meta($user_id, 'shipping_address_1', true),
+        'address_2' => get_user_meta($user_id, 'shipping_address_2', true),
+        'city' => get_user_meta($user_id, 'shipping_city', true),
+        'state' => get_user_meta($user_id, 'shipping_state', true),
+        'postcode' => get_user_meta($user_id, 'shipping_postcode', true),
+        'country' => get_user_meta($user_id, 'shipping_country', true),
+        'phone' => get_user_meta($user_id, 'shipping_phone', true),
+        'type' => 'shipping',
+    ];
+
+    $profile['billing'] = $billing;
+    $profile['shipping'] = $shipping;
+
+    return new WP_REST_Response($profile, 200);
 }
 }
 
@@ -375,6 +412,9 @@ return array(
 'id' => $product->get_id(),
 'name' => $product->get_name(),
 'sku' => $product->get_sku(),
+'type' => $product->get_type(),
+'external_url' => $product->get_type() === 'external' ? $product->get_product_url() : '',
+'button_text' => $product->get_type() === 'external' ? $product->get_button_text() : '',
 'description' => $product->get_description(),
 'short_description' => $product->get_short_description(),
 'price' => floatval($product->get_price()),
@@ -470,6 +510,41 @@ if (!WC()->cart) return new WP_Error('cart_error', 'Cart not initialized.', arra
 $cart_items = array();
 foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
 $product = $cart_item['data'];
+
+// Format product data for client app
+$image_ids = $product->get_gallery_image_ids();
+$images = array();
+$featured_src = wp_get_attachment_url($product->get_image_id());
+
+if ($featured_src) {
+$images[] = array('id' => 0, 'src' => $featured_src, 'alt' => $product->get_name());
+}
+
+foreach ($image_ids as $id) {
+$src = wp_get_attachment_url($id);
+if ($src) {
+$images[] = array('id' => intval($id), 'src' => $src, 'alt' => $product->get_name());
+}
+}
+
+$product_data = array(
+'id' => $product->get_id(),
+'name' => $product->get_name(),
+'sku' => $product->get_sku(),
+'description' => $product->get_description(),
+'short_description' => $product->get_short_description(),
+'price' => floatval($product->get_price()),
+'regular_price' => floatval($product->get_regular_price()),
+'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
+'on_sale' => $product->is_on_sale(),
+'stock_status' => $product->get_stock_status(),
+'stock_quantity' => $product->get_stock_quantity(),
+'images' => $images,
+'average_rating' => floatval($product->get_average_rating()),
+'rating_count' => intval($product->get_rating_count()),
+'is_featured' => $product->is_featured(),
+);
+
 $cart_items[] = array(
 'key' => $cart_item_key,
 'product_id' => $product->get_id(),
@@ -477,7 +552,8 @@ $cart_items[] = array(
 'quantity' => $cart_item['quantity'],
 'price' => floatval($product->get_price()),
 'total' => floatval($cart_item['line_total']),
-'image' => wp_get_attachment_url($product->get_image_id())
+'image' => wp_get_attachment_url($product->get_image_id()),
+'product' => $product_data
 );
 }
 

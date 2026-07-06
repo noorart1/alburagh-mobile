@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
@@ -98,28 +99,49 @@ class ProductCard extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         height: 28,
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            context.read<CartProvider>().addToCart(product);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('تمت الإضافة إلى السلة'),
+                        child: product.type == 'external' && product.externalUrl.isNotEmpty
+                            ? FilledButton.icon(
+                                onPressed: () async {
+                                  final uri = Uri.tryParse(product.externalUrl);
+                                  if (uri != null && await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  }
+                                },
+                                icon: const Icon(Icons.open_in_new, size: 15),
+                                label: Text(
+                                  product.buttonText.isNotEmpty ? product.buttonText : 'شراء',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  backgroundColor: primaryColor,
+                                  foregroundColor: Colors.white,
+                                ),
+                              )
+                            : FilledButton.icon(
+                                onPressed: () {
+                                  context.read<CartProvider>().addToCart(product);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تمت الإضافة إلى السلة'),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.add_shopping_cart, size: 15),
+                                label: const Text(
+                                  'إضافة',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11),
+                                ),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  backgroundColor: primaryColor,
+                                  foregroundColor: Colors.white,
+                                ),
                               ),
-                            );
-                          },
-                          icon: const Icon(Icons.add_shopping_cart, size: 15),
-                          label: const Text(
-                            'إضافة',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11),
-                          ),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
                       ),
                     ],
                   ),

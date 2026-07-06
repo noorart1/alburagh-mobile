@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../core/api_service.dart';
 import '../models/product.dart';
+import '../models/review.dart';
 import '../providers/cart_provider.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -14,7 +17,30 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  final ApiService _api = ApiService();
   int _selectedImageIndex = 0;
+  List<Review> _reviews = [];
+  bool _isLoadingReviews = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    try {
+      final data = await _api.getReviews(productId: widget.product.id);
+      if (!mounted) return;
+      setState(() {
+        _reviews = data.map((r) => Review.fromJson(r as Map<String, dynamic>)).toList();
+        _isLoadingReviews = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingReviews = false);
+    }
+  }
 
   List<String> get _imageUrls {
     if (widget.product.imageUrls.isNotEmpty) {
@@ -82,33 +108,70 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         : 'يتم تحديث الوصف الكامل لهذا المنتج.',
                     style: const TextStyle(fontSize: 16, height: 1.6),
                   ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        context.read<CartProvider>().addToCart(widget.product);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'تمت إضافة ${widget.product.name} إلى السلة',
-                            ),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add_shopping_cart),
-                      label: const Text(
-                        'إضافة إلى السلة',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'المراجعات:',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
+                  const SizedBox(height: 8),
+                  if (_isLoadingReviews)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_reviews.isEmpty)
+                    const Text('لا توجد مراجعات بعد.')
+                  else
+                    ..._reviews.map((review) => Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            title: Text(review.author),
+                            subtitle: Text(review.content),
+                            trailing: Text('${review.rating}/5'),
+                          ),
+                        )),
+                   const SizedBox(height: 32),
+                   SizedBox(
+                     width: double.infinity,
+                     height: 56,
+                     child: widget.product.type == 'external' && widget.product.externalUrl.isNotEmpty
+                         ? ElevatedButton.icon(
+                             onPressed: () async {
+                               final uri = Uri.tryParse(widget.product.externalUrl);
+                               if (uri != null && await canLaunchUrl(uri)) {
+                                 await launchUrl(uri, mode: LaunchMode.externalApplication);
+                               }
+                             },
+                             icon: const Icon(Icons.open_in_new),
+                             label: Text(
+                               widget.product.buttonText.isNotEmpty ? widget.product.buttonText : 'شراء',
+                               style: const TextStyle(fontSize: 18),
+                             ),
+                             style: ElevatedButton.styleFrom(
+                               backgroundColor: Colors.green,
+                               foregroundColor: Colors.white,
+                             ),
+                           )
+                         : ElevatedButton.icon(
+                             onPressed: () {
+                               context.read<CartProvider>().addToCart(widget.product);
+                               ScaffoldMessenger.of(context).showSnackBar(
+                                 SnackBar(
+                                   content: Text(
+                                     'تمت إضافة ${widget.product.name} إلى السلة',
+                                   ),
+                                   backgroundColor: Colors.green,
+                                 ),
+                               );
+                             },
+                             icon: const Icon(Icons.add_shopping_cart),
+                             label: const Text(
+                               'إضافة إلى السلة',
+                               style: TextStyle(fontSize: 18),
+                             ),
+                             style: ElevatedButton.styleFrom(
+                               backgroundColor: Colors.green,
+                               foregroundColor: Colors.white,
+                             ),
+                           ),
+                   ),
                 ],
               ),
             ),

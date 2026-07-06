@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/api_service.dart';
 import '../core/constants.dart';
+import '../models/address.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import 'cart_screen.dart';
@@ -15,16 +17,31 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const _nameKey = 'profile_name';
+  final ApiService _api = ApiService();
+
+  // SharedPreferences keys
+  static const _firstNameKey = 'profile_first_name';
+  static const _lastNameKey = 'profile_last_name';
   static const _phoneKey = 'profile_phone';
   static const _emailKey = 'profile_email';
-  static const _addressKey = 'profile_address';
+  static const _address1Key = 'profile_address1';
+  static const _address2Key = 'profile_address2';
+  static const _cityKey = 'profile_city';
+  static const _stateKey = 'profile_state';
+  static const _postcodeKey = 'profile_postcode';
+  static const _countryKey = 'profile_country';
 
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _address1Controller = TextEditingController();
+  final _address2Controller = TextEditingController();
+  final _cityController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _postcodeController = TextEditingController();
+  final _countryController = TextEditingController();
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -42,10 +59,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _addressController.dispose();
+    _address1Controller.dispose();
+    _address2Controller.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _postcodeController.dispose();
+    _countryController.dispose();
     _loginEmailController.dispose();
     _loginPasswordController.dispose();
     super.dispose();
@@ -55,23 +78,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     final authProvider = context.read<AuthProvider>();
 
+    if (authProvider.isLoggedIn && authProvider.user != null) {
+      try {
+        final profile = await _api.getProfile(authProvider.user!.token ?? '');
+        if (!mounted) return;
+
+        // Try to load billing/shipping address from API
+        String firstName = profile['first_name']?.toString() ?? '';
+        String lastName = profile['last_name']?.toString() ?? '';
+        if (firstName.isEmpty) {
+          firstName = authProvider.user!.name.split(' ').first;
+        }
+        if (lastName.isEmpty && authProvider.user!.name.split(' ').length > 1) {
+          lastName = authProvider.user!.name.split(' ').skip(1).join(' ');
+        }
+
+        // billing address fields from profile
+        final billing = profile['billing'] as Map<String, dynamic>? ?? {};
+        final shipping = profile['shipping'] as Map<String, dynamic>? ?? {};
+
+        setState(() {
+          _firstNameController.text = firstName;
+          _lastNameController.text = lastName;
+          _phoneController.text =
+              profile['phone']?.toString() ??
+              billing['phone']?.toString() ?? '';
+          _emailController.text =
+              profile['email']?.toString() ?? authProvider.user!.email;
+          _address1Controller.text =
+              billing['address_1']?.toString() ??
+              shipping['address_1']?.toString() ?? '';
+          _address2Controller.text =
+              billing['address_2']?.toString() ??
+              shipping['address_2']?.toString() ?? '';
+          _cityController.text =
+              billing['city']?.toString() ??
+              shipping['city']?.toString() ?? '';
+          _stateController.text =
+              billing['state']?.toString() ??
+              shipping['state']?.toString() ?? '';
+          _postcodeController.text =
+              billing['postcode']?.toString() ??
+              shipping['postcode']?.toString() ?? '';
+          _countryController.text =
+              billing['country']?.toString() ??
+              shipping['country']?.toString() ?? '';
+          _isLoading = false;
+        });
+        return;
+      } catch (_) {
+        // fall through to prefs
+      }
+    }
+
     if (!mounted) return;
     setState(() {
-      if (authProvider.isLoggedIn && authProvider.user != null) {
-        _nameController.text = prefs.getString(_nameKey)?.isNotEmpty == true
-            ? prefs.getString(_nameKey)!
-            : authProvider.user!.name;
-        _phoneController.text = prefs.getString(_phoneKey)?.isNotEmpty == true
-            ? prefs.getString(_phoneKey)!
-            : (authProvider.user!.phone ?? '');
-        _emailController.text = authProvider.user!.email;
-        _addressController.text = prefs.getString(_addressKey) ?? (authProvider.user!.address ?? '');
-      } else {
-        _nameController.text = prefs.getString(_nameKey) ?? '';
-        _phoneController.text = prefs.getString(_phoneKey) ?? '';
-        _emailController.text = prefs.getString(_emailKey) ?? '';
-        _addressController.text = prefs.getString(_addressKey) ?? '';
-      }
+      _firstNameController.text = prefs.getString(_firstNameKey) ?? '';
+      _lastNameController.text = prefs.getString(_lastNameKey) ?? '';
+      _phoneController.text = prefs.getString(_phoneKey) ?? '';
+      _emailController.text = prefs.getString(_emailKey) ?? '';
+      _address1Controller.text = prefs.getString(_address1Key) ?? '';
+      _address2Controller.text = prefs.getString(_address2Key) ?? '';
+      _cityController.text = prefs.getString(_cityKey) ?? '';
+      _stateController.text = prefs.getString(_stateKey) ?? '';
+      _postcodeController.text = prefs.getString(_postcodeKey) ?? '';
+      _countryController.text = prefs.getString(_countryKey) ?? '';
       _isLoading = false;
     });
   }
@@ -81,10 +152,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isSaving = true);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_nameKey, _nameController.text.trim());
+    await prefs.setString(_firstNameKey, _firstNameController.text.trim());
+    await prefs.setString(_lastNameKey, _lastNameController.text.trim());
     await prefs.setString(_phoneKey, _phoneController.text.trim());
     await prefs.setString(_emailKey, _emailController.text.trim());
-    await prefs.setString(_addressKey, _addressController.text.trim());
+    await prefs.setString(_address1Key, _address1Controller.text.trim());
+    await prefs.setString(_address2Key, _address2Controller.text.trim());
+    await prefs.setString(_cityKey, _cityController.text.trim());
+    await prefs.setString(_stateKey, _stateController.text.trim());
+    await prefs.setString(_postcodeKey, _postcodeController.text.trim());
+    await prefs.setString(_countryKey, _countryController.text.trim());
 
     if (!mounted) return;
     setState(() => _isSaving = false);
@@ -115,20 +192,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (shouldClear != true) return;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_nameKey);
-    await prefs.remove(_phoneKey);
-    await prefs.remove(_emailKey);
-    await prefs.remove(_addressKey);
+    for (final key in [
+      _firstNameKey, _lastNameKey, _phoneKey, _emailKey,
+      _address1Key, _address2Key, _cityKey, _stateKey,
+      _postcodeKey, _countryKey,
+    ]) {
+      await prefs.remove(key);
+    }
 
     if (!mounted) return;
     final authProvider = context.read<AuthProvider>();
     await authProvider.logout();
-    
+
     setState(() {
-      _nameController.clear();
+      _firstNameController.clear();
+      _lastNameController.clear();
       _phoneController.clear();
       _emailController.clear();
-      _addressController.clear();
+      _address1Controller.clear();
+      _address2Controller.clear();
+      _cityController.clear();
+      _stateController.clear();
+      _postcodeController.clear();
+      _countryController.clear();
     });
   }
 
@@ -165,14 +251,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String get _displayName {
-    final name = _nameController.text.trim();
-    return name.isNotEmpty ? name : 'مستخدم دار البراق';
+    final first = _firstNameController.text.trim();
+    final last = _lastNameController.text.trim();
+    if (first.isNotEmpty && last.isNotEmpty) return '$first $last';
+    if (first.isNotEmpty) return first;
+    if (last.isNotEmpty) return last;
+    return 'مستخدم دار البراق';
   }
 
   String get _subtitle {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
-
     if (phone.isNotEmpty) return phone;
     if (email.isNotEmpty) return email;
     return 'أكمل معلومات حسابك';
@@ -181,6 +270,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String get _initial {
     final name = _displayName.trim();
     return name.isNotEmpty ? name.characters.first : 'م';
+  }
+
+  String get _fullAddressSummary {
+    final parts = [
+      _address1Controller.text.trim(),
+      _address2Controller.text.trim(),
+      _cityController.text.trim(),
+      _stateController.text.trim(),
+      _postcodeController.text.trim(),
+      _countryController.text.trim(),
+    ].where((e) => e.isNotEmpty).toList();
+    return parts.isEmpty ? 'لا يوجد عنوان محفوظ بعد' : parts.join(', ');
   }
 
   @override
@@ -198,12 +299,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // If not logged in, show login screen
     if (!authProvider.isLoggedIn) {
       return _buildLoginScreen(authProvider);
     }
 
-    // If logged in, show profile
     return Scaffold(
       appBar: AppBar(
         title: const Text('حسابي'),
@@ -231,21 +330,159 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onOpenCart: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const CartScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const CartScreen()),
               );
             },
           ),
           const SizedBox(height: 16),
-          _ProfileForm(
-            formKey: _formKey,
-            nameController: _nameController,
-            phoneController: _phoneController,
-            emailController: _emailController,
-            addressController: _addressController,
-            isSaving: _isSaving,
-            onSave: _saveProfile,
+          // Personal Information Section
+          _ProfileSection(
+            title: 'المعلومات الشخصية',
+            children: [
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ProfileTextField(
+                            controller: _firstNameController,
+                            label: 'الاسم الأول',
+                            icon: Icons.person_outline,
+                            textInputAction: TextInputAction.next,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'أدخل الاسم';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _ProfileTextField(
+                            controller: _lastNameController,
+                            label: 'اسم العائلة',
+                            icon: Icons.person_outline,
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _ProfileTextField(
+                      controller: _phoneController,
+                      label: 'رقم الهاتف',
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
+                      validator: (v) {
+                        final phone = v?.trim() ?? '';
+                        if (phone.isEmpty) return 'أدخل رقم الهاتف';
+                        if (phone.length < 8) return 'رقم غير صحيح';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _ProfileTextField(
+                      controller: _emailController,
+                      label: 'البريد الإلكتروني',
+                      icon: Icons.mail_outline,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      validator: (v) {
+                        final email = v?.trim() ?? '';
+                        if (email.isEmpty) return null;
+                        if (!email.contains('@')) return 'بريد غير صحيح';
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Address Section
+          _ProfileSection(
+            title: 'عنوان الشحن',
+            children: [
+              _ProfileTextField(
+                controller: _address1Controller,
+                label: 'الشارع والعنوان',
+                icon: Icons.home_outlined,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              _ProfileTextField(
+                controller: _address2Controller,
+                label: 'الشقة / الدور / التفاصيل الإضافية',
+                icon: Icons.apartment_outlined,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ProfileTextField(
+                      controller: _cityController,
+                      label: 'المدينة',
+                      icon: Icons.location_city_outlined,
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ProfileTextField(
+                      controller: _stateController,
+                      label: 'المحافظة',
+                      icon: Icons.map_outlined,
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ProfileTextField(
+                      controller: _postcodeController,
+                      label: 'الرمز البريدي',
+                      icon: Icons.markunread_mailbox_outlined,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ProfileTextField(
+                      controller: _countryController,
+                      label: 'الدولة',
+                      icon: Icons.flag_outlined,
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _isSaving ? null : _saveProfile,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(_isSaving ? 'جار الحفظ...' : 'حفظ المعلومات'),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _ProfileSection(
@@ -255,15 +492,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: Icons.receipt_long,
                 title: 'طلباتي',
                 subtitle: 'متابعة الطلبات وحالة الشحن',
-                onTap: () => _showComingSoon('طلباتي'),
+                onTap: () async {
+                  final token = context.read<AuthProvider>().user?.token;
+                  if (token == null || token.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+                    return;
+                  }
+                  final orders = await _api.getOrders(token);
+                  if (!mounted) return;
+                  showModalBottomSheet<void>(
+                    context: context,
+                    builder: (context) => Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('طلباتي',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 12),
+                          if (orders.isEmpty)
+                            const Text('لا توجد طلبات بعد.')
+                          else
+                            SizedBox(
+                              height: 220,
+                              child: ListView.builder(
+                                itemCount: orders.length,
+                                itemBuilder: (context, index) {
+                                  final order =
+                                      orders[index] as Map<String, dynamic>;
+                                  return ListTile(
+                                    title: Text('الطلب #${order['id']}'),
+                                    subtitle:
+                                        Text('الحالة: ${order['status']}'),
+                                    trailing: Text('${order['total']}'),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
               _ProfileTile(
                 icon: Icons.location_on_outlined,
                 title: 'عناوين الشحن',
-                subtitle: _addressController.text.trim().isEmpty
-                    ? 'لا يوجد عنوان محفوظ بعد'
-                    : _addressController.text.trim(),
-                onTap: () => _showComingSoon('عناوين الشحن'),
+                subtitle: _fullAddressSummary,
+                onTap: () async {
+                  final token = context.read<AuthProvider>().user?.token;
+                  if (token == null || token.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+                    return;
+                  }
+                  try {
+                    final addresses = await _api.getAddresses(token);
+                    if (!mounted) return;
+                    final primary =
+                        addresses.isNotEmpty ? addresses.first : null;
+                    if (primary != null) {
+                      setState(() {
+                        _firstNameController.text = primary.firstName;
+                        _lastNameController.text = primary.lastName;
+                        _phoneController.text = primary.phone;
+                        _address1Controller.text = primary.address1;
+                        _address2Controller.text = primary.address2;
+                        _cityController.text = primary.city;
+                        _stateController.text = primary.state;
+                        _postcodeController.text = primary.postcode;
+                        _countryController.text = primary.country;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم تحميل العنوان')));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('لا يوجد عنوان محفوظ')));
+                    }
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('فشل تحميل العناوين')));
+                  }
+                },
               ),
               _ProfileTile(
                 icon: Icons.favorite_border,
@@ -291,6 +604,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -305,7 +619,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header with gradient
             Container(
               height: 220,
               decoration: BoxDecoration(
@@ -318,14 +631,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.account_circle,
-                      size: 60,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
+                  children: const [
+                    Icon(Icons.account_circle, size: 60, color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
                       'تسجيل الدخول',
                       style: TextStyle(
                         fontSize: 28,
@@ -333,25 +642,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
+                    SizedBox(height: 8),
+                    Text(
                       'سجل دخولك للوصول إلى حسابك',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.white70),
                     ),
                   ],
                 ),
               ),
             ),
-            // Login form
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Error message
                   if (authProvider.error != null)
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -368,9 +672,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: Text(
                               authProvider.error!,
                               style: TextStyle(
-                                color: Colors.red.shade600,
-                                fontSize: 14,
-                              ),
+                                  color: Colors.red.shade600, fontSize: 14),
                             ),
                           ),
                           IconButton(
@@ -381,7 +683,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   if (authProvider.error != null) const SizedBox(height: 16),
-                  // Email field
                   TextField(
                     controller: _loginEmailController,
                     enabled: !authProvider.isLoading,
@@ -389,17 +690,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       hintText: 'البريد الإلكتروني',
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
+                          horizontal: 16, vertical: 14),
                     ),
                     keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 16),
-                  // Password field
                   TextField(
                     controller: _loginPasswordController,
                     enabled: !authProvider.isLoading,
@@ -413,23 +710,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                        onPressed: () =>
+                            setState(() => _obscurePassword = !_obscurePassword),
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
+                          horizontal: 16, vertical: 14),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // Login button
                   ElevatedButton(
                     onPressed: authProvider.isLoading
                         ? null
@@ -446,8 +736,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       backgroundColor: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     child: authProvider.isLoading
                         ? const SizedBox(
@@ -472,25 +761,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Wrap(
                     alignment: WrapAlignment.center,
                     children: [
-                      Text(
-                        'ليس لديك حساب؟ ',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
+                      Text('ليس لديك حساب؟ ',
+                          style: TextStyle(color: Colors.grey[600])),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
-                            ),
+                                builder: (context) => const RegisterScreen()),
                           );
                         },
                         child: Text(
                           'أنشئ حساباً',
                           style: TextStyle(
-                            color: primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              color: primaryColor, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -504,6 +788,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
+// ──────────────────────────────── Widgets ────────────────────────────────────
 
 class _ProfileHeader extends StatelessWidget {
   final String name;
@@ -601,106 +887,6 @@ class _CartSummary extends StatelessWidget {
   }
 }
 
-class _ProfileForm extends StatelessWidget {
-  final GlobalKey<FormState> formKey;
-  final TextEditingController nameController;
-  final TextEditingController phoneController;
-  final TextEditingController emailController;
-  final TextEditingController addressController;
-  final bool isSaving;
-  final VoidCallback onSave;
-
-  const _ProfileForm({
-    required this.formKey,
-    required this.nameController,
-    required this.phoneController,
-    required this.emailController,
-    required this.addressController,
-    required this.isSaving,
-    required this.onSave,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _ProfileSection(
-      title: 'المعلومات الشخصية',
-      children: [
-        Form(
-          key: formKey,
-          child: Column(
-            children: [
-              _ProfileTextField(
-                controller: nameController,
-                label: 'الاسم الكامل',
-                icon: Icons.person_outline,
-                textInputAction: TextInputAction.next,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'أدخل الاسم الكامل';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              _ProfileTextField(
-                controller: phoneController,
-                label: 'رقم الهاتف',
-                icon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.next,
-                validator: (value) {
-                  final phone = value?.trim() ?? '';
-                  if (phone.isEmpty) return 'أدخل رقم الهاتف';
-                  if (phone.length < 8) return 'رقم الهاتف غير صحيح';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              _ProfileTextField(
-                controller: emailController,
-                label: 'البريد الإلكتروني',
-                icon: Icons.mail_outline,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                validator: (value) {
-                  final email = value?.trim() ?? '';
-                  if (email.isEmpty) return null;
-                  if (!email.contains('@')) return 'البريد الإلكتروني غير صحيح';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              _ProfileTextField(
-                controller: addressController,
-                label: 'عنوان الشحن',
-                icon: Icons.home_outlined,
-                maxLines: 3,
-                textInputAction: TextInputAction.newline,
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton.icon(
-                  onPressed: isSaving ? null : onSave,
-                  icon: isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(isSaving ? 'جار الحفظ...' : 'حفظ المعلومات'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ProfileTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
@@ -741,10 +927,7 @@ class _ProfileSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
-  const _ProfileSection({
-    required this.title,
-    required this.children,
-  });
+  const _ProfileSection({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -752,7 +935,6 @@ class _ProfileSection extends StatelessWidget {
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.grey.shade200),
         ),
@@ -801,11 +983,7 @@ class _ProfileTile extends StatelessWidget {
           child: Icon(icon, color: primaryColor),
         ),
         title: Text(title),
-        subtitle: Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: const Icon(Icons.chevron_left),
         onTap: onTap,
       ),

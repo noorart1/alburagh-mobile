@@ -43,6 +43,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
         _applyFiltersAndSort();
         isLoading = false;
       });
+      // Load cart data after loading products
+      await context.read<CartProvider>().loadCart();
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoading = false);

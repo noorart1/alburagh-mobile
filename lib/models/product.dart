@@ -8,6 +8,9 @@ class Product {
   final String imageUrl;
   final List<String> imageUrls;
   final String description;
+  final String type;
+  final String externalUrl;
+  final String buttonText;
 
   Product({
     required this.id,
@@ -17,6 +20,9 @@ class Product {
     required this.imageUrl,
     required this.imageUrls,
     required this.description,
+    required this.type,
+    required this.externalUrl,
+    required this.buttonText,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -40,6 +46,9 @@ class Product {
       imageUrl: images.isNotEmpty ? images.first : '',
       imageUrls: images,
       description: StringUtils.stripHtmlTags(description),
+      type: json['type']?.toString() ?? '',
+      externalUrl: json['external_url']?.toString() ?? '',
+      buttonText: json['button_text']?.toString() ?? '',
     );
   }
 }

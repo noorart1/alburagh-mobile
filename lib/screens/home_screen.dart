@@ -47,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
         categories = catData.map((c) => Category.fromJson(c)).toList();
         isLoading = false;
       });
+      // Load cart data after loading products and categories
+      await context.read<CartProvider>().loadCart();
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoading = false);
