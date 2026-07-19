@@ -87,7 +87,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         actions: [
           IconButton(
             icon: Badge(
-              label: Text('${context.watch<CartProvider>().items.length}'),
+              label: Text('${context.watch<CartProvider>().itemCount}'),
               child: const Icon(Icons.shopping_cart),
             ),
             onPressed: () => Navigator.pushNamed(context, '/cart'),

@@ -47,8 +47,13 @@ class _HomeScreenState extends State<HomeScreen> {
         categories = catData.map((c) => Category.fromJson(c)).toList();
         isLoading = false;
       });
-      // Load cart data after loading products and categories
-      await context.read<CartProvider>().loadCart();
+      // Load cart data after loading products and categories. Do not let a
+      // cart failure block the already-loaded home content.
+      try {
+        await context.read<CartProvider>().loadCart();
+      } catch (_) {
+        // Ignore cart errors so the home screen stays usable.
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoading = false);
@@ -64,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: Badge(
-              label: Text('${context.watch<CartProvider>().items.length}'),
+              label: Text('${context.watch<CartProvider>().itemCount}'),
               child: const Icon(Icons.shopping_cart),
             ),
             onPressed: () => Navigator.pushNamed(context, '/cart'),

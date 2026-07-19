@@ -325,8 +325,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           _CartSummary(
-            itemCount: cart.items.length,
-            totalPrice: cart.totalPrice,
+            itemCount: cart.itemCount,
+            totalPrice: cart.formatPrice(cart.totalPrice),
             onOpenCart: () {
               Navigator.push(
                 context,
@@ -857,7 +857,7 @@ class _ProfileHeader extends StatelessWidget {
 
 class _CartSummary extends StatelessWidget {
   final int itemCount;
-  final double totalPrice;
+  final String totalPrice;
   final VoidCallback onOpenCart;
 
   const _CartSummary({
@@ -878,7 +878,7 @@ class _CartSummary extends StatelessWidget {
             child: Icon(Icons.shopping_cart_outlined, color: primaryColor),
           ),
           title: Text('$itemCount منتج في السلة'),
-          subtitle: Text('المجموع: $totalPrice دولار'),
+      subtitle: Text('المجموع: $totalPrice دولار'),
           trailing: const Icon(Icons.chevron_left),
           onTap: onOpenCart,
         ),

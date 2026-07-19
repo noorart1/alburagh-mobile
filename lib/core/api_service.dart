@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart';
 import '../models/address.dart';
 
@@ -21,13 +22,16 @@ class ApiService {
     int perPage = 20,
     String? category,
   }) async {
+    final Map<String, dynamic> queryParams = {
+      'page': page,
+      'per_page': perPage,
+    };
+    if (category != null && category.isNotEmpty) {
+      queryParams['category'] = int.tryParse(category) ?? category;
+    }
     final response = await _dio.get(
       'products',
-      queryParameters: {
-        'page': page,
-        'per_page': perPage,
-        ...?category == null ? null : {'category': category},
-      },
+      queryParameters: queryParams,
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
@@ -138,11 +142,35 @@ class ApiService {
         : <String, dynamic>{};
   }
 
+  Future<Options?> _authOptions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+
+    if (token == null || token.isEmpty) {
+      return null;
+    }
+
+    return Options(headers: {'Authorization': 'Bearer $token'});
+  }
+
   Future<Map<String, dynamic>> getCart() async {
-    final response = await _dio.get('cart');
-    return response.data is Map
-        ? Map<String, dynamic>.from(response.data)
-        : <String, dynamic>{};
+    try {
+      final response = await _dio.get(
+        'cart',
+        options: await _authOptions(),
+      );
+      return response.data is Map
+          ? Map<String, dynamic>.from(response.data)
+          : <String, dynamic>{};
+    } on DioException catch (e) {
+      // The custom cart endpoint can return HTTP 500 when there is no valid
+      // server-side cart/session yet. Treat that case as an empty cart so the
+      // app remains usable instead of showing Dio's raw technical error.
+      if (e.response?.statusCode == 500) {
+        return {'items': <dynamic>[]};
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> addToCart({
@@ -152,6 +180,7 @@ class ApiService {
     final response = await _dio.post(
       'cart',
       data: {'product_id': productId, 'quantity': quantity},
+      options: await _authOptions(),
     );
     return response.data is Map
         ? Map<String, dynamic>.from(response.data)
@@ -165,6 +194,7 @@ class ApiService {
     final response = await _dio.put(
       'cart',
       data: {'cart_item_key': cartItemKey, 'quantity': quantity},
+      options: await _authOptions(),
     );
     return response.data is Map
         ? Map<String, dynamic>.from(response.data)
@@ -172,7 +202,10 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> clearCart() async {
-    final response = await _dio.delete('cart');
+    final response = await _dio.delete(
+      'cart',
+      options: await _authOptions(),
+    );
     return response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};

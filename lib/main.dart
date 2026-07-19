@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/main_screen.dart';
+import 'screens/cart_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -43,6 +44,9 @@ class MyApp extends StatelessWidget {
           fontFamily: 'Vazirmatn',
         ),
         home: const MainScreen(),
+        routes: {
+          '/cart': (context) => const CartScreen(),
+        },
         debugShowCheckedModeBanner: false,
       ),
     );

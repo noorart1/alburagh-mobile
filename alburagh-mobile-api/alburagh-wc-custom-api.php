@@ -492,26 +492,165 @@ return new WP_REST_Response(array(
 // ==========================================
 
 class AlBuragh_API_Cart_Controller {
-private function init_wc_cart() {
-if (function_exists('WC')) {
-if (WC()->session === null) {
-WC()->init_session();
-}
-if (WC()->cart === null) {
-WC()->cart = new WC_Cart();
-}
-}
+private function get_user_id_from_request($request) {
+$auth_header = $request->get_header('Authorization');
+if (empty($auth_header)) return 0;
+
+$token = str_replace('Bearer ', '', $auth_header);
+$user_id = AlBuragh_JWT_Auth::validate_token($token);
+
+return $user_id ? intval($user_id) : 0;
 }
 
-public function get_cart($request) {
-$this->init_wc_cart();
-if (!WC()->cart) return new WP_Error('cart_error', 'Cart not initialized.', array('status' => 500));
+private function get_persistent_cart_meta_key() {
+return '_woocommerce_persistent_cart_' . get_current_blog_id();
+}
 
-$cart_items = array();
-foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
-$product = $cart_item['data'];
+  private function extract_persistent_cart($user_id) {
+    $persistent_cart = get_user_meta(
+      $user_id,
+      $this->get_persistent_cart_meta_key(),
+      true
+    );
 
-// Format product data for client app
+    if (!is_array($persistent_cart)) return array();
+
+    $raw_cart = isset($persistent_cart['cart']) && is_array($persistent_cart['cart'])
+      ? $persistent_cart['cart']
+      : $persistent_cart;
+
+    // Keyed by product_id (string) so array_merge/+ never reindexes numeric keys.
+    $cart = array();
+    foreach ($raw_cart as $cart_item_key => $cart_item) {
+      // Handle both array items and serialized objects
+      if (!is_array($cart_item) && is_object($cart_item)) {
+        $cart_item = (array) $cart_item;
+      }
+      if (!is_array($cart_item)) continue;
+
+      $product_id = isset($cart_item['product_id'])
+        ? intval($cart_item['product_id'])
+        : 0;
+      $quantity = isset($cart_item['quantity'])
+        ? intval($cart_item['quantity'])
+        : 0;
+
+      if ($product_id > 0 && $quantity > 0) {
+        $key = (string) $product_id;
+        $cart[$key] = isset($cart[$key])
+          ? $cart[$key] + $quantity
+          : $quantity;
+      }
+    }
+
+    return $cart;
+  }
+
+private function get_user_cart($user_id) {
+$mobile_cart = get_user_meta($user_id, '_alburagh_mobile_cart', true);
+$mobile_cart = is_array($mobile_cart) ? $mobile_cart : array();
+
+// Normalize mobile cart keys to strings to avoid reindexing.
+$normalized_mobile = array();
+foreach ($mobile_cart as $product_id => $quantity) {
+  $pid = (string) intval($product_id);
+  $qty = intval($quantity);
+  if ($pid > 0 && $qty > 0) {
+    $normalized_mobile[$pid] = isset($normalized_mobile[$pid])
+      ? $normalized_mobile[$pid] + $qty
+      : $qty;
+  }
+}
+
+$persistent_cart = $this->extract_persistent_cart($user_id);
+
+// Preserve carts that were already saved through the WooCommerce website.
+// The app-specific values take precedence when the same product exists in both.
+// Use the union (+) operator (NOT array_merge) so numeric product_id keys are
+// preserved instead of being reindexed from 0, which previously caused the
+// cart to come back empty for logged-in users.
+return $normalized_mobile + $persistent_cart;
+}
+
+  private function save_user_cart($user_id, $cart) {
+    $clean_cart = array();
+
+    foreach ($cart as $product_id => $quantity) {
+      $product_id = intval($product_id);
+      $quantity = intval($quantity);
+
+      if ($product_id > 0 && $quantity > 0) {
+        $clean_cart[$product_id] = $quantity;
+      }
+    }
+
+    update_user_meta($user_id, '_alburagh_mobile_cart', $clean_cart);
+
+    // Preserve website cart by merging with app cart
+    $persistent_cart = get_user_meta(
+      $user_id,
+      $this->get_persistent_cart_meta_key(),
+      true
+    );
+    $persistent_cart = is_array($persistent_cart) ? $persistent_cart : array();
+    
+    // Extract existing website cart items before overwriting
+    $existing_website_items = array();
+    if (isset($persistent_cart['cart']) && is_array($persistent_cart['cart'])) {
+      foreach ($persistent_cart['cart'] as $cart_item_key => $cart_item) {
+        if (!is_array($cart_item) && is_object($cart_item)) {
+          $cart_item = (array) $cart_item;
+        }
+        if (is_array($cart_item)) {
+          $product_id = isset($cart_item['product_id']) ? intval($cart_item['product_id']) : 0;
+          $quantity = isset($cart_item['quantity']) ? intval($cart_item['quantity']) : 0;
+          if ($product_id > 0 && $quantity > 0) {
+            $existing_website_items[$product_id] = $quantity;
+          }
+        }
+      }
+    }
+    
+    // Merge: app items override website items if same product
+    $merged_cart = array_merge($existing_website_items, $clean_cart);
+    
+    $persistent_cart['cart'] = array();
+
+    foreach ($merged_cart as $product_id => $quantity) {
+      $cart_item_key = WC()->cart
+        ? WC()->cart->generate_cart_id($product_id)
+        : md5('mobile_cart_' . $product_id);
+
+      $persistent_cart['cart'][$cart_item_key] = array(
+        'key' => $cart_item_key,
+        'product_id' => $product_id,
+        'variation_id' => 0,
+        'variation' => array(),
+        'quantity' => $quantity,
+        'data_hash' => wc_get_product($product_id)
+          ? wc_get_product($product_id)->get_data_hash()
+          : '',
+        'line_tax_data' => array(
+          'subtotal' => array(),
+          'total' => array(),
+        ),
+        'line_subtotal' => 0,
+        'line_subtotal_tax' => 0,
+        'line_total' => 0,
+        'line_tax' => 0,
+      );
+    }
+
+    update_user_meta(
+      $user_id,
+      $this->get_persistent_cart_meta_key(),
+      $persistent_cart
+    );
+
+    return $clean_cart;
+  }
+
+private function product_payload($product) {
 $image_ids = $product->get_gallery_image_ids();
 $images = array();
 $featured_src = wp_get_attachment_url($product->get_image_id());
@@ -527,7 +666,7 @@ $images[] = array('id' => intval($id), 'src' => $src, 'alt' => $product->get_nam
 }
 }
 
-$product_data = array(
+return array(
 'id' => $product->get_id(),
 'name' => $product->get_name(),
 'sku' => $product->get_sku(),
@@ -544,6 +683,79 @@ $product_data = array(
 'rating_count' => intval($product->get_rating_count()),
 'is_featured' => $product->is_featured(),
 );
+}
+
+private function cart_response_from_items($cart) {
+$cart_items = array();
+$total = 0;
+
+foreach ($cart as $product_id => $quantity) {
+$product_id = intval($product_id);
+$quantity = intval($quantity);
+$product = wc_get_product($product_id);
+
+if (!$product || $quantity < 1) continue;
+
+$price = floatval($product->get_price());
+$line_total = $price * $quantity;
+$total += $line_total;
+
+$cart_items[] = array(
+'key' => (string) $product_id,
+'product_id' => $product_id,
+'name' => $product->get_name(),
+'quantity' => $quantity,
+'price' => $price,
+'total' => $line_total,
+'image' => wp_get_attachment_url($product->get_image_id()),
+'product' => $this->product_payload($product)
+);
+}
+
+return new WP_REST_Response(array(
+'items' => $cart_items,
+'total' => $total,
+'subtotal' => $total
+), 200);
+}
+
+private function init_wc_cart() {
+if (function_exists('WC')) {
+if (is_null(WC()->session)) {
+WC()->init_session();
+}
+if (is_null(WC()->cart)) {
+WC()->cart = new WC_Cart();
+}
+}
+}
+
+public function get_cart($request) {
+$user_id = $this->get_user_id_from_request($request);
+if ($user_id) {
+$user_cart = $this->get_user_cart($user_id);
+
+// DEBUG: Log what we found
+error_log('DEBUG get_cart for user ' . $user_id);
+error_log('User cart: ' . print_r($user_cart, true));
+
+// Also check what's stored in meta directly
+$meta_key = $this->get_persistent_cart_meta_key();
+$persistent = get_user_meta($user_id, $meta_key, true);
+error_log('Persistent cart meta (' . $meta_key . '): ' . print_r($persistent, true));
+
+$mobile = get_user_meta($user_id, '_alburagh_mobile_cart', true);
+error_log('Mobile cart meta: ' . print_r($mobile, true));
+
+return $this->cart_response_from_items($user_cart);
+}
+
+$this->init_wc_cart();
+if (!WC()->cart) return new WP_Error('cart_error', 'Cart not initialized.', array('status' => 500));
+
+$cart_items = array();
+foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
+$product = $cart_item['data'];
 
 $cart_items[] = array(
 'key' => $cart_item_key,
@@ -553,7 +765,7 @@ $cart_items[] = array(
 'price' => floatval($product->get_price()),
 'total' => floatval($cart_item['line_total']),
 'image' => wp_get_attachment_url($product->get_image_id()),
-'product' => $product_data
+'product' => $this->product_payload($product)
 );
 }
 
@@ -565,7 +777,6 @@ return new WP_REST_Response(array(
 }
 
 public function add_to_cart($request) {
-$this->init_wc_cart();
 $params = $request->get_json_params();
 $product_id = isset($params['product_id']) ? intval($params['product_id']) : 0;
 $quantity = isset($params['quantity']) ? intval($params['quantity']) : 1;
@@ -574,15 +785,29 @@ if (!$product_id) {
 return new WP_Error('missing_product', 'Product ID is required.', array('status' => 400));
 }
 
+$product = wc_get_product($product_id);
+if (!$product || !$product->is_purchasable()) {
+return new WP_Error('invalid_product', 'Product is not purchasable.', array('status' => 400));
+}
+
+$user_id = $this->get_user_id_from_request($request);
+if ($user_id) {
+$cart = $this->get_user_cart($user_id);
+$cart[$product_id] = isset($cart[$product_id]) ? intval($cart[$product_id]) + max(1, $quantity) : max(1, $quantity);
+$this->save_user_cart($user_id, $cart);
+
+return $this->cart_response_from_items($this->get_user_cart($user_id));
+}
+
+$this->init_wc_cart();
 $added = WC()->cart->add_to_cart($product_id, $quantity);
 if ($added) {
-return new WP_REST_Response(array('success' => true, 'message' => 'Product added to cart.'), 200);
+return $this->get_cart($request);
 }
 return new WP_Error('add_failed', 'Could not add product to cart.', array('status' => 400));
 }
 
 public function update_cart($request) {
-$this->init_wc_cart();
 $params = $request->get_json_params();
 $cart_item_key = isset($params['cart_item_key']) ? sanitize_text_field($params['cart_item_key']) : '';
 $quantity = isset($params['quantity']) ? intval($params['quantity']) : 0;
@@ -591,19 +816,41 @@ if (empty($cart_item_key)) {
 return new WP_Error('missing_key', 'Cart item key is required.', array('status' => 400));
 }
 
+$user_id = $this->get_user_id_from_request($request);
+if ($user_id) {
+$product_id = intval($cart_item_key);
+$cart = $this->get_user_cart($user_id);
+
+if ($quantity > 0) {
+$cart[$product_id] = $quantity;
+} else {
+unset($cart[$product_id]);
+}
+
+$this->save_user_cart($user_id, $cart);
+return $this->cart_response_from_items($this->get_user_cart($user_id));
+}
+
+$this->init_wc_cart();
 if ($quantity > 0) {
 WC()->cart->set_quantity($cart_item_key, $quantity);
-return new WP_REST_Response(array('success' => true, 'message' => 'Cart updated.'), 200);
+return $this->get_cart($request);
 } else {
 WC()->cart->remove_cart_item($cart_item_key);
-return new WP_REST_Response(array('success' => true, 'message' => 'Item removed from cart.'), 200);
+return $this->get_cart($request);
 }
 }
 
 public function clear_cart($request) {
+$user_id = $this->get_user_id_from_request($request);
+if ($user_id) {
+delete_user_meta($user_id, '_alburagh_mobile_cart');
+return $this->cart_response_from_items(array());
+}
+
 $this->init_wc_cart();
 WC()->cart->empty_cart();
-return new WP_REST_Response(array('success' => true, 'message' => 'Cart cleared.'), 200);
+return $this->get_cart($request);
 }
 }
 
@@ -819,6 +1066,51 @@ return new WP_REST_Response(array(
 }
 }
 
+// Debug controller
+class AlBuragh_API_Debug_Controller {
+  private function get_user_id_from_request($request) {
+    $auth_header = $request->get_header('Authorization');
+    if (empty($auth_header)) return 0;
+    $token = str_replace('Bearer ', '', $auth_header);
+    $user_id = AlBuragh_JWT_Auth::validate_token($token);
+    return $user_id ? intval($user_id) : 0;
+  }
+
+  public function debug_cart($request) {
+    $user_id = $this->get_user_id_from_request($request);
+    if (!$user_id) {
+      return new WP_Error('unauthorized', 'Token invalid', array('status' => 401));
+    }
+
+    $result = array(
+      'user_id' => $user_id,
+      'blog_id' => get_current_blog_id(),
+      'persistent_meta_key' => '_woocommerce_persistent_cart_' . get_current_blog_id(),
+    );
+
+    // Get all user meta
+    $all_meta = get_user_meta($user_id);
+    $result['all_user_meta_keys'] = array_keys($all_meta);
+
+    // Get persistent cart specifically
+    $persistent_key = '_woocommerce_persistent_cart_' . get_current_blog_id();
+    $persistent = get_user_meta($user_id, $persistent_key, true);
+    $result['persistent_cart_raw'] = $persistent;
+
+    // Get mobile cart
+    $mobile = get_user_meta($user_id, '_alburagh_mobile_cart', true);
+    $result['mobile_cart_raw'] = $mobile;
+
+    // Check WooCommerce session
+    if (function_exists('WC')) {
+      $session_data = get_user_meta($user_id, '_woocommerce_session', true);
+      $result['woocommerce_session_raw'] = $session_data;
+    }
+
+    return new WP_REST_Response($result, 200);
+  }
+}
+
 // 3. SECURE ENDPOINTS ROUTING SETUP
 add_action('rest_api_init', function () {
 $auth = new AlBuragh_API_Auth_Controller();
@@ -829,6 +1121,7 @@ $review = new AlBuragh_API_Review_Controller();
 $coupon = new AlBuragh_API_Coupon_Controller();
 $address = new AlBuragh_API_Address_Controller();
 $order = new AlBuragh_API_Order_Controller();
+$debug = new AlBuragh_API_Debug_Controller();
 
 // Authenticators
 register_rest_route('alburagh/v1', '/login', array(
@@ -964,6 +1257,13 @@ register_rest_route('alburagh/v1', '/orders', array(
 register_rest_route('alburagh/v1', '/orders/(?P<id>\d+)', array(
 'methods' => 'GET',
 'callback' => array($order, 'get_order_details'),
+'permission_callback' => '__return_true'
+));
+
+// Debug endpoint
+register_rest_route('alburagh/v1', '/debug/cart', array(
+'methods' => 'GET',
+'callback' => array($debug, 'debug_cart'),
 'permission_callback' => '__return_true'
 ));
 });
