@@ -3,6 +3,40 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart';
 import '../models/address.dart';
 
+/// Minimal in-memory cookie store shared by every [ApiService] instance.
+///
+/// The custom cart endpoint falls back to WooCommerce's native session-based
+/// cart (`WC()->cart`) for guests, which is only kept alive via the
+/// `woocommerce_cart_hash`/PHP session cookie set by the server. Without
+/// resending that cookie on every request, each call starts a brand-new
+/// anonymous session and the guest cart appears empty right after adding
+/// an item.
+class _CookieStore {
+  static final Map<String, String> _cookies = {};
+
+  static void saveFromHeaders(Headers headers) {
+    final setCookies = headers['set-cookie'];
+    if (setCookies == null) return;
+
+    for (final raw in setCookies) {
+      final firstPair = raw.split(';').first;
+      final separatorIndex = firstPair.indexOf('=');
+      if (separatorIndex <= 0) continue;
+
+      final name = firstPair.substring(0, separatorIndex).trim();
+      final value = firstPair.substring(separatorIndex + 1).trim();
+      if (name.isNotEmpty) {
+        _cookies[name] = value;
+      }
+    }
+  }
+
+  static String? get header {
+    if (_cookies.isEmpty) return null;
+    return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+  }
+}
+
 class ApiService {
   final Dio _dio = Dio();
   final Dio _wpDio = Dio();
@@ -15,6 +49,31 @@ class ApiService {
     _wpDio.options.baseUrl = wpBaseUrl;
     _wpDio.options.connectTimeout = const Duration(seconds: 30);
     _wpDio.options.receiveTimeout = const Duration(seconds: 30);
+
+    for (final dio in [_dio, _wpDio]) {
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final cookieHeader = _CookieStore.header;
+            if (cookieHeader != null) {
+              options.headers['Cookie'] = cookieHeader;
+            }
+            handler.next(options);
+          },
+          onResponse: (response, handler) {
+            _CookieStore.saveFromHeaders(response.headers);
+            handler.next(response);
+          },
+          onError: (error, handler) {
+            final headers = error.response?.headers;
+            if (headers != null) {
+              _CookieStore.saveFromHeaders(headers);
+            }
+            handler.next(error);
+          },
+        ),
+      );
+    }
   }
 
   Future<List<dynamic>> getProducts({

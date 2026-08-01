@@ -121,11 +121,18 @@ class ProductCard extends StatelessWidget {
                                 ),
                               )
                             : FilledButton.icon(
-                                onPressed: () {
-                                  context.read<CartProvider>().addToCart(product);
+                                onPressed: () async {
+                                  final cart = context.read<CartProvider>();
+                                  final success = await cart.addToCart(product);
+                                  if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('تمت الإضافة إلى السلة'),
+                                    SnackBar(
+                                      content: Text(
+                                        success
+                                            ? 'تمت الإضافة إلى السلة'
+                                            : cart.error ?? 'فشل إضافة المنتج للسلة',
+                                      ),
+                                      backgroundColor: success ? null : Colors.red,
                                     ),
                                   );
                                 },

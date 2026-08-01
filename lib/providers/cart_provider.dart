@@ -124,6 +124,20 @@ class CartProvider with ChangeNotifier {
     }
   }
 
+  Future<void> mergeCart(List<CartItem> guestItems) async {
+    try {
+      for (final item in guestItems) {
+        await _apiService.addToCart(
+          productId: item.product.id,
+          quantity: item.quantity,
+        );
+      }
+      await loadCart();
+    } catch (e) {
+      debugPrint('Error merging cart: $e');
+    }
+  }
+
   Future<bool> removeFromCart(Product product) async {
     try {
       _error = null;
@@ -220,6 +234,10 @@ class CartProvider with ChangeNotifier {
         paymentMethod: paymentMethod,
         paymentMethodTitle: paymentMethodTitle,
       );
+
+      // Keep the authenticated WooCommerce cart in sync with the local state
+      // after the order has been created successfully.
+      await _apiService.clearCart();
 
       _items.clear();
       _serverTotal = 0;

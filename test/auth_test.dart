@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:alburagh_app/providers/auth_provider.dart';
+import 'package:alburagh_app/providers/cart_provider.dart';
 import 'package:alburagh_app/screens/login_screen.dart';
 import 'package:alburagh_app/screens/register_screen.dart';
 
@@ -10,8 +11,11 @@ void main() {
     testWidgets('should display login form elements', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const LoginScreen(),
           ),
         ),
@@ -30,8 +34,11 @@ void main() {
     testWidgets('should show/hide password when toggle clicked', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const LoginScreen(),
           ),
         ),
@@ -50,12 +57,16 @@ void main() {
     });
 
     testWidgets('should disable fields when loading', (WidgetTester tester) async {
-      final authProvider = AuthProvider();
+      final cartProvider = CartProvider();
+      final authProvider = AuthProvider(cartProvider);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => authProvider,
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: cartProvider),
+              ChangeNotifierProvider.value(value: authProvider),
+            ],
             child: const LoginScreen(),
           ),
         ),
@@ -69,8 +80,11 @@ void main() {
     testWidgets('should display register form elements', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const RegisterScreen(),
           ),
         ),
@@ -88,8 +102,11 @@ void main() {
     testWidgets('should validate required fields', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const RegisterScreen(),
           ),
         ),
@@ -106,8 +123,11 @@ void main() {
     testWidgets('should validate email format', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const RegisterScreen(),
           ),
         ),
@@ -123,8 +143,11 @@ void main() {
     testWidgets('should validate password length', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const RegisterScreen(),
           ),
         ),
@@ -140,8 +163,11 @@ void main() {
     testWidgets('should show/hide password when toggle clicked', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider(
-            create: (_) => AuthProvider(),
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+            ],
             child: const RegisterScreen(),
           ),
         ),
@@ -162,7 +188,7 @@ void main() {
 
   group('AuthProvider Tests', () {
     test('initial state should be logged out', () {
-      final authProvider = AuthProvider();
+      final authProvider = AuthProvider(CartProvider());
 
       expect(authProvider.isLoggedIn, false);
       expect(authProvider.user, null);
@@ -171,7 +197,7 @@ void main() {
     });
 
     test('clearError should reset error to null', () {
-      final authProvider = AuthProvider();
+      final authProvider = AuthProvider(CartProvider());
 
       authProvider.clearError();
       expect(authProvider.error, null);

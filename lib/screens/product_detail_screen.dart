@@ -150,14 +150,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                              ),
                            )
                          : ElevatedButton.icon(
-                             onPressed: () {
-                               context.read<CartProvider>().addToCart(widget.product);
+                             onPressed: () async {
+                               final cart = context.read<CartProvider>();
+                               final success = await cart.addToCart(widget.product);
+                               if (!context.mounted) return;
                                ScaffoldMessenger.of(context).showSnackBar(
                                  SnackBar(
                                    content: Text(
-                                     'تمت إضافة ${widget.product.name} إلى السلة',
+                                     success
+                                         ? 'تمت إضافة ${widget.product.name} إلى السلة'
+                                         : cart.error ?? 'فشل إضافة المنتج للسلة',
                                    ),
-                                   backgroundColor: Colors.green,
+                                   backgroundColor: success ? Colors.green : Colors.red,
                                  ),
                                );
                              },

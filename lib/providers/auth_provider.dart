@@ -5,9 +5,11 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
 import '../models/user.dart';
+import 'cart_provider.dart'; // Import CartProvider
 
 class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
+  final CartProvider _cartProvider; // Add CartProvider dependency
 
   User? _user;
   bool _isLoggedIn = false;
@@ -19,7 +21,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  AuthProvider() {
+  AuthProvider(this._cartProvider) {
     _loadSavedAuth();
   }
 
@@ -34,6 +36,8 @@ class AuthProvider extends ChangeNotifier {
       _user = User(id: userId, email: email, name: name, token: token);
       _isLoggedIn = true;
       notifyListeners();
+      // Load cart after successful auto-login
+      await _cartProvider.loadCart();
     }
   }
 
@@ -100,6 +104,9 @@ class AuthProvider extends ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
+
+      // Merge guest cart with user cart after successful login
+      await _cartProvider.mergeCart(_cartProvider.items);
       return true;
     } on DioException catch (e) {
       if (e.response?.statusCode == 403) {
@@ -205,7 +212,9 @@ class AuthProvider extends ChangeNotifier {
         phone: phone,
       );
 
-      return await login(email, password);
+      // login() already merges the guest cart after it stores the new token.
+      // Merging again here would add every guest item twice.
+      return login(email, password);
     } on DioException catch (e) {
       final data = e.response?.data;
       if (data is Map && data['message'] != null) {
@@ -240,6 +249,8 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('user_name');
 
     notifyListeners();
+    // Clear cart after logout
+    await _cartProvider.clearCart();
   }
 
   void clearError() {

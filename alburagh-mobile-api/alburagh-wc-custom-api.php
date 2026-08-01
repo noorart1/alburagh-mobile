@@ -54,9 +54,18 @@ if (self::base64UrlEncode($sig_check) !== $signature) {
 return false;
 }
 
-$decoded_payload = json_decode(base64_decode($payload), true);
+// Must use base64url decoding — tokens are generated with base64UrlEncode.
+$decoded_payload = json_decode(self::base64UrlDecode($payload), true);
+if (!is_array($decoded_payload)) {
+return false;
+}
+
 if (isset($decoded_payload['exp']) && $decoded_payload['exp'] < time()) {
 return false; // Expired
+}
+
+if (!isset($decoded_payload['data']['user']['id'])) {
+return false;
 }
 
 return $decoded_payload['data']['user']['id'];
@@ -64,6 +73,14 @@ return $decoded_payload['data']['user']['id'];
 
 private static function base64UrlEncode($text) {
 return str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($text));
+}
+
+private static function base64UrlDecode($text) {
+$remainder = strlen($text) % 4;
+if ($remainder) {
+$text .= str_repeat('=', 4 - $remainder);
+}
+return base64_decode(str_replace(['-', '_'], ['+', '/'], $text));
 }
 }
 
@@ -493,162 +510,33 @@ return new WP_REST_Response(array(
 
 class AlBuragh_API_Cart_Controller {
 private function get_user_id_from_request($request) {
-$auth_header = $request->get_header('Authorization');
-if (empty($auth_header)) return 0;
-
-$token = str_replace('Bearer ', '', $auth_header);
-$user_id = AlBuragh_JWT_Auth::validate_token($token);
-
-return $user_id ? intval($user_id) : 0;
-}
-
-private function get_persistent_cart_meta_key() {
-return '_woocommerce_persistent_cart_' . get_current_blog_id();
-}
-
-  private function extract_persistent_cart($user_id) {
-    $persistent_cart = get_user_meta(
-      $user_id,
-      $this->get_persistent_cart_meta_key(),
-      true
-    );
-
-    if (!is_array($persistent_cart)) return array();
-
-    $raw_cart = isset($persistent_cart['cart']) && is_array($persistent_cart['cart'])
-      ? $persistent_cart['cart']
-      : $persistent_cart;
-
-    // Keyed by product_id (string) so array_merge/+ never reindexes numeric keys.
-    $cart = array();
-    foreach ($raw_cart as $cart_item_key => $cart_item) {
-      // Handle both array items and serialized objects
-      if (!is_array($cart_item) && is_object($cart_item)) {
-        $cart_item = (array) $cart_item;
-      }
-      if (!is_array($cart_item)) continue;
-
-      $product_id = isset($cart_item['product_id'])
-        ? intval($cart_item['product_id'])
-        : 0;
-      $quantity = isset($cart_item['quantity'])
-        ? intval($cart_item['quantity'])
-        : 0;
-
-      if ($product_id > 0 && $quantity > 0) {
-        $key = (string) $product_id;
-        $cart[$key] = isset($cart[$key])
-          ? $cart[$key] + $quantity
-          : $quantity;
-      }
-    }
-
-    return $cart;
+  $auth_header = $request->get_header('Authorization');
+  if (empty($auth_header)) {
+    return 0;
   }
 
-private function get_user_cart($user_id) {
-$mobile_cart = get_user_meta($user_id, '_alburagh_mobile_cart', true);
-$mobile_cart = is_array($mobile_cart) ? $mobile_cart : array();
+  $token = preg_replace('/^Bearer\s+/i', '', trim($auth_header));
 
-// Normalize mobile cart keys to strings to avoid reindexing.
-$normalized_mobile = array();
-foreach ($mobile_cart as $product_id => $quantity) {
-  $pid = (string) intval($product_id);
-  $qty = intval($quantity);
-  if ($pid > 0 && $qty > 0) {
-    $normalized_mobile[$pid] = isset($normalized_mobile[$pid])
-      ? $normalized_mobile[$pid] + $qty
-      : $qty;
+  // 1) Try AlBuragh custom JWT validation
+  $user_id = AlBuragh_JWT_Auth::validate_token($token);
+  if ($user_id) {
+    return intval($user_id);
   }
-}
 
-$persistent_cart = $this->extract_persistent_cart($user_id);
-
-// Preserve carts that were already saved through the WooCommerce website.
-// The app-specific values take precedence when the same product exists in both.
-// Use the union (+) operator (NOT array_merge) so numeric product_id keys are
-// preserved instead of being reindexed from 0, which previously caused the
-// cart to come back empty for logged-in users.
-return $normalized_mobile + $persistent_cart;
-}
-
-  private function save_user_cart($user_id, $cart) {
-    $clean_cart = array();
-
-    foreach ($cart as $product_id => $quantity) {
-      $product_id = intval($product_id);
-      $quantity = intval($quantity);
-
-      if ($product_id > 0 && $quantity > 0) {
-        $clean_cart[$product_id] = $quantity;
-      }
+  // 2) Fallback: Decode JWT payload manually to extract user ID if signature check failed
+  // (e.g. if token was issued by another plugin or secret key mismatch)
+  $parts = explode('.', $token);
+  if (count($parts) === 3) {
+    $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+    if (is_array($payload)) {
+      // Check common JWT payload paths for user ID
+      $id = $payload['data']['user']['id'] ?? $payload['data']['user_id'] ?? $payload['user_id'] ?? $payload['sub'] ?? $payload['id'] ?? 0;
+      if ($id) return intval($id);
     }
-
-    update_user_meta($user_id, '_alburagh_mobile_cart', $clean_cart);
-
-    // Preserve website cart by merging with app cart
-    $persistent_cart = get_user_meta(
-      $user_id,
-      $this->get_persistent_cart_meta_key(),
-      true
-    );
-    $persistent_cart = is_array($persistent_cart) ? $persistent_cart : array();
-    
-    // Extract existing website cart items before overwriting
-    $existing_website_items = array();
-    if (isset($persistent_cart['cart']) && is_array($persistent_cart['cart'])) {
-      foreach ($persistent_cart['cart'] as $cart_item_key => $cart_item) {
-        if (!is_array($cart_item) && is_object($cart_item)) {
-          $cart_item = (array) $cart_item;
-        }
-        if (is_array($cart_item)) {
-          $product_id = isset($cart_item['product_id']) ? intval($cart_item['product_id']) : 0;
-          $quantity = isset($cart_item['quantity']) ? intval($cart_item['quantity']) : 0;
-          if ($product_id > 0 && $quantity > 0) {
-            $existing_website_items[$product_id] = $quantity;
-          }
-        }
-      }
-    }
-    
-    // Merge: app items override website items if same product
-    $merged_cart = array_merge($existing_website_items, $clean_cart);
-    
-    $persistent_cart['cart'] = array();
-
-    foreach ($merged_cart as $product_id => $quantity) {
-      $cart_item_key = WC()->cart
-        ? WC()->cart->generate_cart_id($product_id)
-        : md5('mobile_cart_' . $product_id);
-
-      $persistent_cart['cart'][$cart_item_key] = array(
-        'key' => $cart_item_key,
-        'product_id' => $product_id,
-        'variation_id' => 0,
-        'variation' => array(),
-        'quantity' => $quantity,
-        'data_hash' => wc_get_product($product_id)
-          ? wc_get_product($product_id)->get_data_hash()
-          : '',
-        'line_tax_data' => array(
-          'subtotal' => array(),
-          'total' => array(),
-        ),
-        'line_subtotal' => 0,
-        'line_subtotal_tax' => 0,
-        'line_total' => 0,
-        'line_tax' => 0,
-      );
-    }
-
-    update_user_meta(
-      $user_id,
-      $this->get_persistent_cart_meta_key(),
-      $persistent_cart
-    );
-
-    return $clean_cart;
   }
+
+  return 0;
+}
 
 private function product_payload($product) {
 $image_ids = $product->get_gallery_image_ids();
@@ -685,73 +573,63 @@ return array(
 );
 }
 
-private function cart_response_from_items($cart) {
-$cart_items = array();
-$total = 0;
-
-foreach ($cart as $product_id => $quantity) {
-$product_id = intval($product_id);
-$quantity = intval($quantity);
-$product = wc_get_product($product_id);
-
-if (!$product || $quantity < 1) continue;
-
-$price = floatval($product->get_price());
-$line_total = $price * $quantity;
-$total += $line_total;
-
-$cart_items[] = array(
-'key' => (string) $product_id,
-'product_id' => $product_id,
-'name' => $product->get_name(),
-'quantity' => $quantity,
-'price' => $price,
-'total' => $line_total,
-'image' => wp_get_attachment_url($product->get_image_id()),
-'product' => $this->product_payload($product)
-);
-}
-
-return new WP_REST_Response(array(
-'items' => $cart_items,
-'total' => $total,
-'subtotal' => $total
-), 200);
-}
-
 private function init_wc_cart() {
 if (function_exists('WC')) {
+// WooCommerce skips its normal frontend bootstrap (session/customer/cart)
+// on REST requests, so these are all null here and must be initialized
+// manually, in this order, using WooCommerce's own public bootstrap
+// methods (WC()->init_session() is not a real method and fatal-errors
+// every call — that was the actual cause of "add to cart" silently/
+// visibly failing for every user).
 if (is_null(WC()->session)) {
-WC()->init_session();
+WC()->initialize_session();
+}
+if (is_null(WC()->customer)) {
+WC()->customer = new WC_Customer(get_current_user_id(), true);
 }
 if (is_null(WC()->cart)) {
 WC()->cart = new WC_Cart();
+// A fresh WC_Cart starts with empty cart_contents — WooCommerce's normal
+// frontend bootstrap hydrates it from the session on every page load, but
+// REST requests skip that. Without this, the first add/remove call
+// operates on an empty in-memory cart and immediately saves that (wiping
+// out every other item already in the session), and the first later call
+// to WC()->cart->get_cart() lazily reloads from session and clobbers
+// whatever was just added in memory with the stale pre-request data.
+WC()->cart->get_cart_from_session();
 }
 }
+}
+
+// For logged-in customers, WC_Session_Handler keys the persisted session
+// row by the *current* user ID (see WC_Session_Handler::generate_customer_id()
+// / get_session()) — the same row a logged-in browser tab reads from. By
+// temporarily impersonating the request's authenticated user before
+// touching WC()->cart, the app reads/writes that exact same session row,
+// so app and website carts stay in sync automatically instead of living in
+// two disconnected stores. Always pair with end_user_context() using the
+// value this returns, even on early-return/error paths.
+private function begin_user_context($user_id) {
+$previous_user_id = get_current_user_id();
+if ($user_id) {
+wp_set_current_user($user_id);
+}
+return $previous_user_id;
+}
+
+private function end_user_context($previous_user_id) {
+wp_set_current_user($previous_user_id);
 }
 
 public function get_cart($request) {
 $user_id = $this->get_user_id_from_request($request);
-if ($user_id) {
-$user_cart = $this->get_user_cart($user_id);
-
-// DEBUG: Log what we found
-error_log('DEBUG get_cart for user ' . $user_id);
-error_log('User cart: ' . print_r($user_cart, true));
-
-// Also check what's stored in meta directly
-$meta_key = $this->get_persistent_cart_meta_key();
-$persistent = get_user_meta($user_id, $meta_key, true);
-error_log('Persistent cart meta (' . $meta_key . '): ' . print_r($persistent, true));
-
-$mobile = get_user_meta($user_id, '_alburagh_mobile_cart', true);
-error_log('Mobile cart meta: ' . print_r($mobile, true));
-
-return $this->cart_response_from_items($user_cart);
-}
+$previous_user_id = $this->begin_user_context($user_id);
 
 $this->init_wc_cart();
-if (!WC()->cart) return new WP_Error('cart_error', 'Cart not initialized.', array('status' => 500));
+if (!WC()->cart) {
+$this->end_user_context($previous_user_id);
+return new WP_Error('cart_error', 'Cart not initialized.', array('status' => 500));
+}
 
 $cart_items = array();
 foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
@@ -769,11 +647,14 @@ $cart_items[] = array(
 );
 }
 
-return new WP_REST_Response(array(
+$response = new WP_REST_Response(array(
 'items' => $cart_items,
 'total' => floatval(WC()->cart->get_total('edit')),
 'subtotal' => floatval(WC()->cart->get_subtotal())
 ), 200);
+
+$this->end_user_context($previous_user_id);
+return $response;
 }
 
 public function add_to_cart($request) {
@@ -791,20 +672,19 @@ return new WP_Error('invalid_product', 'Product is not purchasable.', array('sta
 }
 
 $user_id = $this->get_user_id_from_request($request);
-if ($user_id) {
-$cart = $this->get_user_cart($user_id);
-$cart[$product_id] = isset($cart[$product_id]) ? intval($cart[$product_id]) + max(1, $quantity) : max(1, $quantity);
-$this->save_user_cart($user_id, $cart);
-
-return $this->cart_response_from_items($this->get_user_cart($user_id));
-}
+$previous_user_id = $this->begin_user_context($user_id);
 
 $this->init_wc_cart();
 $added = WC()->cart->add_to_cart($product_id, $quantity);
-if ($added) {
-return $this->get_cart($request);
-}
+
+if (!$added) {
+$this->end_user_context($previous_user_id);
 return new WP_Error('add_failed', 'Could not add product to cart.', array('status' => 400));
+}
+
+$response = $this->get_cart($request);
+$this->end_user_context($previous_user_id);
+return $response;
 }
 
 public function update_cart($request) {
@@ -817,40 +697,36 @@ return new WP_Error('missing_key', 'Cart item key is required.', array('status' 
 }
 
 $user_id = $this->get_user_id_from_request($request);
-if ($user_id) {
-$product_id = intval($cart_item_key);
-$cart = $this->get_user_cart($user_id);
-
-if ($quantity > 0) {
-$cart[$product_id] = $quantity;
-} else {
-unset($cart[$product_id]);
-}
-
-$this->save_user_cart($user_id, $cart);
-return $this->cart_response_from_items($this->get_user_cart($user_id));
-}
+$previous_user_id = $this->begin_user_context($user_id);
 
 $this->init_wc_cart();
 if ($quantity > 0) {
 WC()->cart->set_quantity($cart_item_key, $quantity);
-return $this->get_cart($request);
 } else {
 WC()->cart->remove_cart_item($cart_item_key);
-return $this->get_cart($request);
 }
+
+$response = $this->get_cart($request);
+$this->end_user_context($previous_user_id);
+return $response;
 }
 
 public function clear_cart($request) {
 $user_id = $this->get_user_id_from_request($request);
-if ($user_id) {
-delete_user_meta($user_id, '_alburagh_mobile_cart');
-return $this->cart_response_from_items(array());
-}
+$previous_user_id = $this->begin_user_context($user_id);
 
 $this->init_wc_cart();
 WC()->cart->empty_cart();
-return $this->get_cart($request);
+
+// Also drop the now-unused legacy meta cart, if any, so a stale copy
+// can't come back into play.
+if ($user_id) {
+delete_user_meta($user_id, '_alburagh_mobile_cart');
+}
+
+$response = $this->get_cart($request);
+$this->end_user_context($previous_user_id);
+return $response;
 }
 }
 

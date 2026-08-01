@@ -16,12 +16,18 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => CartProvider()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-      ],
-      child: MaterialApp(
-        title: 'دار البراق',
+        providers: [
+          ChangeNotifierProvider(create: (_) => CartProvider()),
+          ChangeNotifierProxyProvider<CartProvider, AuthProvider>(
+            create: (context) => AuthProvider(
+              Provider.of<CartProvider>(context, listen: false),
+            ),
+            update: (context, cartProvider, authProvider) =>
+                authProvider ?? AuthProvider(cartProvider),
+          ),
+        ],
+        child: MaterialApp(
+          title: 'دار البراق',
         locale: const Locale('ar'),
         supportedLocales: const [
           Locale('ar'),
