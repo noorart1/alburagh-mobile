@@ -1,0 +1,5 @@
+{
+  "unwantedRecommendations": [
+    "vscjava.vscode-gradle"
+  ]
+}

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../core/api_service.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/country_picker_field.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -13,6 +15,8 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  final ApiService _api = ApiService();
+
   static final Uri _originalCartUri = Uri.parse(
     'https://alburagh.com/%d8%b3%d9%84%d8%a9-%d8%a7%d9%84%d9%85%d8%b4%d8%aa%d8%b1%d9%8a%d8%a7%d8%aa/',
   );
@@ -43,6 +47,22 @@ class _CartScreenState extends State<CartScreen> {
 
   bool _shippingSameAsBilling = true;
   bool _checkoutLoading = false;
+  String? _selectedPaymentMethod;
+
+  static const _iraqCountryValues = {'IQ', 'IRAQ', 'العراق'};
+
+  // Gateway IDs of the WooCommerce PayPal Payments plugin active on
+  // alburagh.com (see WooCommerce > Settings > Payments): 'ppcp-gateway' is
+  // the PayPal smart-button gateway, 'ppcp-credit-card-gateway' is the
+  // "Standard Card Button" (Visa/Mastercard) gateway.
+  static const _paypalGateway = (id: 'ppcp-gateway', title: 'الدفع عبر PayPal');
+  static const _cardGateway = (
+    id: 'ppcp-credit-card-gateway',
+    title: 'الدفع بواسطة بطاقة الفيزا/الماستركارد',
+  );
+
+  bool _isIraq(String country) =>
+      _iraqCountryValues.contains(country.trim().toUpperCase());
 
   @override
   void initState() {
@@ -83,14 +103,61 @@ class _CartScreenState extends State<CartScreen> {
     final auth = context.read<AuthProvider>();
     if (!auth.isLoggedIn || auth.user == null) return;
 
-    final firstName = auth.user!.name.trim().split(' ').first;
-    final lastName = auth.user!.name.trim().split(' ').length > 1
+    final fallbackFirstName = auth.user!.name.trim().split(' ').first;
+    final fallbackLastName = auth.user!.name.trim().split(' ').length > 1
         ? auth.user!.name.trim().split(' ').skip(1).join(' ')
         : '';
 
-    _billingFirstNameController.text = firstName;
-    _billingLastNameController.text = lastName;
+    _billingFirstNameController.text = fallbackFirstName;
+    _billingLastNameController.text = fallbackLastName;
     _billingEmailController.text = auth.user!.email;
+
+    try {
+      final token = auth.user!.token ?? '';
+      if (token.isEmpty) return;
+      final profile = await _api.getProfile(token);
+      if (!mounted) return;
+
+      final billing = profile['billing'] as Map<String, dynamic>? ?? {};
+      final shipping = profile['shipping'] as Map<String, dynamic>? ?? {};
+
+      String pick(Map<String, dynamic> m, String key) =>
+          m[key]?.toString() ?? '';
+
+      setState(() {
+        if (pick(billing, 'first_name').isNotEmpty) {
+          _billingFirstNameController.text = pick(billing, 'first_name');
+        }
+        if (pick(billing, 'last_name').isNotEmpty) {
+          _billingLastNameController.text = pick(billing, 'last_name');
+        }
+        _billingPhoneController.text = pick(billing, 'phone');
+        _billingAddress1Controller.text = pick(billing, 'address_1');
+        _billingAddress2Controller.text = pick(billing, 'address_2');
+        _billingCityController.text = pick(billing, 'city');
+        _billingStateController.text = pick(billing, 'state');
+        _billingPostcodeController.text = pick(billing, 'postcode');
+        _billingCountryController.text = pick(billing, 'country');
+
+        final shippingHasAddress = pick(shipping, 'address_1').isNotEmpty;
+        _shippingSameAsBilling = !shippingHasAddress;
+
+        if (shippingHasAddress) {
+          _shippingFirstNameController.text = pick(shipping, 'first_name');
+          _shippingLastNameController.text = pick(shipping, 'last_name');
+          _shippingPhoneController.text = pick(shipping, 'phone');
+          _shippingAddress1Controller.text = pick(shipping, 'address_1');
+          _shippingAddress2Controller.text = pick(shipping, 'address_2');
+          _shippingCityController.text = pick(shipping, 'city');
+          _shippingStateController.text = pick(shipping, 'state');
+          _shippingPostcodeController.text = pick(shipping, 'postcode');
+          _shippingCountryController.text = pick(shipping, 'country');
+        }
+      });
+    } catch (_) {
+      // Keep the name/email fallback already set above; the checkout
+      // form still works with the user typing the address manually.
+    }
   }
 
   Map<String, dynamic> _addressPayload({
@@ -157,6 +224,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _showCheckoutSheet(CartProvider cart) async {
+    _selectedPaymentMethod = null;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -243,9 +311,11 @@ class _CartScreenState extends State<CartScreen> {
                           controller: _billingPostcodeController,
                           label: 'الرمز البريدي',
                         ),
-                        _CheckoutTextField(
-                          controller: _billingCountryController,
-                          label: 'الدولة',
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: CountryPickerField(
+                            controller: _billingCountryController,
+                          ),
                         ),
                       ],
                     ),
@@ -297,14 +367,63 @@ class _CartScreenState extends State<CartScreen> {
                               controller: _shippingPostcodeController,
                               label: 'الرمز البريدي',
                             ),
-                            _CheckoutTextField(
-                              controller: _shippingCountryController,
-                              label: 'الدولة',
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: CountryPickerField(
+                                controller: _shippingCountryController,
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ],
+                    const SizedBox(height: 12),
+                    AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _billingCountryController,
+                        _shippingCountryController,
+                      ]),
+                      builder: (context, _) {
+                        final destinationCountry = _shippingSameAsBilling
+                            ? _billingCountryController.text
+                            : _shippingCountryController.text;
+                        if (_isIraq(destinationCountry)) {
+                          return const SizedBox.shrink();
+                        }
+                        return _CheckoutSection(
+                          title: 'طريقة الدفع',
+                          children: [
+                            _PaymentMethodOption(
+                              label: _paypalGateway.title,
+                              icon: Icons.account_balance_wallet_outlined,
+                              selected: _selectedPaymentMethod ==
+                                  _paypalGateway.id,
+                              onTap: () {
+                                setState(
+                                  () => _selectedPaymentMethod =
+                                      _paypalGateway.id,
+                                );
+                                setSheetState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            _PaymentMethodOption(
+                              label: _cardGateway.title,
+                              icon: Icons.credit_card,
+                              selected: _selectedPaymentMethod ==
+                                  _cardGateway.id,
+                              onTap: () {
+                                setState(
+                                  () => _selectedPaymentMethod =
+                                      _cardGateway.id,
+                                );
+                                setSheetState(() {});
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
@@ -318,6 +437,22 @@ class _CartScreenState extends State<CartScreen> {
                                     : _shippingFormKey.currentState?.validate() ?? false;
 
                                 if (!billingValid || !shippingValid) return;
+
+                                final destinationCountryPreCheck =
+                                    _shippingSameAsBilling
+                                        ? _billingCountryController.text
+                                        : _shippingCountryController.text;
+                                if (!_isIraq(destinationCountryPreCheck) &&
+                                    _selectedPaymentMethod == null) {
+                                  ScaffoldMessenger.of(this.context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('يرجى اختيار طريقة الدفع'),
+                                    ),
+                                  );
+                                  return;
+                                }
 
                                 final messenger =
                                     ScaffoldMessenger.of(this.context);
@@ -351,22 +486,75 @@ class _CartScreenState extends State<CartScreen> {
                                           country: _shippingCountryController,
                                         );
 
+                                  final destinationCountry =
+                                      shipping['country'] as String? ?? '';
+                                  final isIraq = _isIraq(destinationCountry);
+                                  final selectedGateway =
+                                      _selectedPaymentMethod ==
+                                              _cardGateway.id
+                                          ? _cardGateway
+                                          : _paypalGateway;
+
                                   final result = await cart.checkout(
                                     billingAddress: billing,
                                     shippingAddress: shipping,
+                                    paymentMethod: isIraq
+                                        ? 'cod'
+                                        : selectedGateway.id,
+                                    paymentMethodTitle: isIraq
+                                        ? 'الدفع عند الاستلام'
+                                        : selectedGateway.title,
                                   );
 
                                   if (!context.mounted) return;
                                   Navigator.pop(context);
 
                                   if (!mounted) return;
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'تم إنشاء الطلب #${result['id'] ?? ''} بنجاح',
+
+                                  if (isIraq) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'تم إنشاء الطلب #${result['id'] ?? ''} بنجاح',
+                                        ),
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  } else {
+                                    final orderId = result['id'];
+                                    final orderKey = result['order_key'];
+
+                                    if (orderId == null || orderKey == null) {
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'تم إنشاء الطلب لكن تعذر فتح صفحة الدفع، '
+                                            'يرجى المتابعة من صفحة "طلباتي" أو الموقع مباشرة',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    final payUri = Uri.parse(
+                                      'https://alburagh.com/checkout/order-pay/$orderId/'
+                                      '?pay_for_order=true&key=$orderKey',
+                                    );
+                                    if (await canLaunchUrl(payUri)) {
+                                      await launchUrl(
+                                        payUri,
+                                        mode: LaunchMode.externalApplication,
+                                      );
+                                    }
+                                    if (!mounted) return;
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'تم إنشاء الطلب #$orderId، '
+                                          'أكمل الدفع عبر الموقع في الصفحة التي فُتحت',
+                                        ),
+                                      ),
+                                    );
+                                  }
                                 } catch (_) {
                                   if (!mounted) return;
                                   messenger.showSnackBar(
@@ -553,6 +741,52 @@ class _CheckoutSection extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentMethodOption extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PaymentMethodOption({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? color : Colors.grey.shade400,
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: selected ? color : null),
+            const SizedBox(width: 10),
+            Expanded(child: Text(label)),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off,
+              color: selected ? color : null,
+            ),
           ],
         ),
       ),

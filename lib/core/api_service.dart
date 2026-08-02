@@ -179,6 +179,20 @@ class ApiService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> updateProfile(
+    String token,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await _dio.put(
+      'profile',
+      data: data,
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> checkoutOrder({
     required List<Map<String, dynamic>> cartItems,
     required Map<String, dynamic> billingAddress,

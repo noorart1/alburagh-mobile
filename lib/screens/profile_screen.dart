@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
-import '../models/address.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
 import 'register_screen.dart';
 
@@ -150,6 +150,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final authProvider = context.read<AuthProvider>();
+
     setState(() => _isSaving = true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_firstNameKey, _firstNameController.text.trim());
@@ -163,10 +165,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setString(_postcodeKey, _postcodeController.text.trim());
     await prefs.setString(_countryKey, _countryController.text.trim());
 
+    final token = authProvider.user?.token;
+    String? errorMessage;
+
+    if (authProvider.isLoggedIn && token != null && token.isNotEmpty) {
+      final address = {
+        'address_1': _address1Controller.text.trim(),
+        'address_2': _address2Controller.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim(),
+        'postcode': _postcodeController.text.trim(),
+        'country': _countryController.text.trim(),
+        'phone': _phoneController.text.trim(),
+      };
+      try {
+        await _api.updateProfile(token, {
+          'first_name': _firstNameController.text.trim(),
+          'last_name': _lastNameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'email': _emailController.text.trim(),
+          'billing': address,
+          'shipping': address,
+        });
+      } catch (e) {
+        errorMessage = 'تم الحفظ على الجهاز فقط، فشل التحديث في الحساب: $e';
+      }
+    }
+
     if (!mounted) return;
     setState(() => _isSaving = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ معلومات الحساب')),
+      SnackBar(content: Text(errorMessage ?? 'تم حفظ معلومات الحساب')),
     );
   }
 
@@ -457,12 +486,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _ProfileTextField(
-                      controller: _countryController,
-                      label: 'الدولة',
-                      icon: Icons.flag_outlined,
-                      textInputAction: TextInputAction.done,
-                    ),
+                    child: CountryPickerField(controller: _countryController),
                   ),
                 ],
               ),
@@ -625,7 +649,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [primaryColor, primaryColor.withOpacity(0.7)],
+                  colors: [primaryColor, primaryColor.withValues(alpha: 0.7)],
                 ),
               ),
               child: Center(
@@ -902,9 +926,8 @@ class _ProfileTextField extends StatelessWidget {
     required this.icon,
     this.keyboardType,
     this.textInputAction,
-    this.maxLines = 1,
     this.validator,
-  });
+  }) : maxLines = 1;
 
   @override
   Widget build(BuildContext context) {

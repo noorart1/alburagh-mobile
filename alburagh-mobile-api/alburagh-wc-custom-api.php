@@ -11,6 +11,77 @@ if ( ! defined( 'ABSPATH' ) ) {
 exit; // Prevent direct access
 }
 
+// CORS: the Flutter web build calls this API cross-origin from the browser
+// (mobile/desktop builds aren't subject to CORS, which is why this only
+// broke on `flutter run -d chrome`). WordPress core normally sends
+// Access-Control-Allow-Origin via rest_send_cors_headers(), but on this site
+// that isn't reaching the response (likely stripped/disabled by another
+// plugin or the caching layer), so every cross-origin request — including
+// the OPTIONS preflight browsers send before any request carrying an
+// Authorization header — was being silently blocked by the browser before
+// the app ever saw a response. Send the headers ourselves, scoped to only
+// our own REST namespace so we don't change CORS behavior anywhere else on
+// the site.
+add_action('rest_api_init', function () {
+if (strpos($_SERVER['REQUEST_URI'] ?? '', '/wp-json/alburagh/v1/') === false) {
+return;
+}
+
+// Tell LiteSpeed's edge cache to never cache these responses. Some
+// requests to this namespace were being answered straight from
+// LiteSpeed's cache/edge layer without ever reaching PHP (observed on
+// both a plain GET and an OPTIONS preflight) — which is how the CORS
+// headers below could go missing even though this code runs on every
+// request. Beyond CORS, that's a real data-leak risk for personalized
+// responses like /cart, so this must stay even after CORS is fixed.
+header('X-LiteSpeed-Cache-Control: no-cache');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+$origin = get_http_origin();
+if ($origin) {
+header('Access-Control-Allow-Origin: ' . esc_url_raw($origin));
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce');
+header('Access-Control-Allow-Credentials: true');
+header('Vary: Origin', false);
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+status_header(200);
+exit;
+}
+}, 0);
+
+// Cash on delivery is Iraq-only. Accepts either an ISO code ('IQ') or a
+// free-text country name, since the mobile app's address form is a plain
+// text field rather than the country dropdown the website checkout uses.
+function alburagh_is_iraq_address($address) {
+$country = isset($address['country']) ? trim($address['country']) : '';
+return in_array(strtoupper($country), array('IQ', 'IRAQ', 'العراق'), true);
+}
+
+// Hides Cash on Delivery on the website checkout for non-Iraq shipping
+// destinations. The custom REST checkout used by the app enforces the same
+// rule separately in AlBuragh_API_Checkout_Controller::checkout() since it
+// doesn't go through WooCommerce's own gateway list.
+add_filter('woocommerce_available_payment_gateways', function ($gateways) {
+if (!isset($gateways['cod']) || is_admin()) {
+return $gateways;
+}
+
+$customer = WC()->customer;
+if (!$customer) {
+return $gateways;
+}
+
+$country = $customer->get_shipping_country() ?: $customer->get_billing_country();
+if (!alburagh_is_iraq_address(array('country' => $country))) {
+unset($gateways['cod']);
+}
+
+return $gateways;
+});
+
 // Ensure JWT Library or helper helper classes are configured
 class AlBuragh_JWT_Auth {
 private static $secret_key = '3yT!9Kq#Lz7@aP1$Vn8XmR2&wQ5HsE0';
@@ -251,6 +322,67 @@ public function get_profile($request) {
 
     return new WP_REST_Response($profile, 200);
 }
+
+// The /profile route was registered for PUT but pointed at get_profile,
+// which just returns the profile and ignores the request body -- so
+// saving from the app silently did nothing and the next GET /profile
+// would bring back the old values. This is the real update handler.
+public function update_profile($request) {
+    $auth_header = $request->get_header('Authorization');
+    if (empty($auth_header)) {
+        return new WP_Error('unauthorized', 'Token missing.', array('status' => 401));
+    }
+
+    $token = str_replace('Bearer ', '', $auth_header);
+    $user_id = AlBuragh_JWT_Auth::validate_token($token);
+
+    if (!$user_id) {
+        return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
+    }
+
+    $user = get_user_by('id', $user_id);
+    if (!$user) {
+        return new WP_Error('invalid_user', 'User not found', array('status' => 404));
+    }
+
+    $params = $request->get_json_params();
+
+    $first_name = isset($params['first_name']) ? sanitize_text_field($params['first_name']) : null;
+    $last_name = isset($params['last_name']) ? sanitize_text_field($params['last_name']) : null;
+    $phone = isset($params['phone']) ? sanitize_text_field($params['phone']) : null;
+    $email = isset($params['email']) ? sanitize_email($params['email']) : null;
+
+    if ($first_name !== null) {
+        wp_update_user(array('ID' => $user_id, 'first_name' => $first_name));
+    }
+    if ($last_name !== null) {
+        wp_update_user(array('ID' => $user_id, 'last_name' => $last_name));
+    }
+    if ($email !== null && $email !== '') {
+        wp_update_user(array('ID' => $user_id, 'user_email' => $email));
+    }
+    if ($phone !== null) {
+        update_user_meta($user_id, 'billing_phone', $phone);
+    }
+
+    $address_fields = array('address_1', 'address_2', 'city', 'state', 'postcode', 'country');
+
+    foreach (array('billing', 'shipping') as $type) {
+        if (!isset($params[$type]) || !is_array($params[$type])) {
+            continue;
+        }
+        foreach ($address_fields as $field) {
+            if (isset($params[$type][$field])) {
+                update_user_meta($user_id, $type . '_' . $field, sanitize_text_field($params[$type][$field]));
+            }
+        }
+        if (isset($params[$type]['phone'])) {
+            update_user_meta($user_id, $type . '_phone', sanitize_text_field($params[$type]['phone']));
+        }
+    }
+
+    return $this->get_profile($request);
+}
 }
 
 class AlBuragh_API_Product_Controller {
@@ -483,10 +615,27 @@ $order->set_address($shipping, 'shipping');
 $payment_method = sanitize_text_field($params['payment_method']);
 $payment_title = sanitize_text_field($params['payment_method_title']);
 
+// COD is Iraq-only; the client submits payment_method directly with no
+// server-side check against country, so without this a non-Iraq order
+// could still be placed as COD.
+if (strtolower($payment_method) === 'cod' && !alburagh_is_iraq_address($shipping ?: $billing)) {
+$order->delete(true);
+return new WP_Error('cod_not_available', 'Cash on delivery is only available for orders shipped to Iraq.', array('status' => 400));
+}
+
 $order->set_payment_method($payment_method);
 $order->set_payment_method_title($payment_title);
 $order->calculate_totals();
+
+// COD is paid on delivery, so it can move straight to processing. Every
+// other method here hasn't actually been paid yet -- the app sends the
+// customer to the site's own pay-for-order page to complete PayPal/card
+// payment, so the order must stay pending until that payment succeeds.
+if (strtolower($payment_method) === 'cod') {
 $order->update_status('processing', 'Injected securely from AlBuragh App client.');
+} else {
+$order->update_status('pending', 'Awaiting payment via AlBuragh App client.');
+}
 
 return new WP_REST_Response(array(
 'id' => $order->get_id(),
@@ -1016,8 +1165,13 @@ register_rest_route('alburagh/v1', '/forgot-password', array(
 'permission_callback' => '__return_true'
 ));
 register_rest_route('alburagh/v1', '/profile', array(
-'methods' => array('GET', 'PUT'),
+'methods' => 'GET',
 'callback' => array($auth, 'get_profile'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/profile', array(
+'methods' => 'PUT',
+'callback' => array($auth, 'update_profile'),
 'permission_callback' => '__return_true'
 ));
 
