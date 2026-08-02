@@ -143,6 +143,16 @@ class ApiService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final response = await _dio.post(
+      'forgot-password',
+      data: {'email': email},
+    );
+    return response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> loginWithJwt({
     required String username,
     required String password,
@@ -193,26 +203,19 @@ class ApiService {
         : <String, dynamic>{};
   }
 
-  Future<Map<String, dynamic>> checkoutOrder({
-    required List<Map<String, dynamic>> cartItems,
-    required Map<String, dynamic> billingAddress,
-    required Map<String, dynamic> shippingAddress,
-    required String paymentMethod,
-    required String paymentMethodTitle,
+  /// Requests a short-lived, single-use login link so the customer can be
+  /// sent to [redirectTo] on the real website already logged in there,
+  /// instead of having to sign in a second time in the browser.
+  Future<String?> createAutoLoginLink({
+    required String token,
+    required String redirectTo,
   }) async {
     final response = await _dio.post(
-      'checkout',
-      data: {
-        'billing_address': billingAddress,
-        'shipping_address': shippingAddress,
-        'cart_items': cartItems,
-        'payment_method': paymentMethod,
-        'payment_method_title': paymentMethodTitle,
-      },
+      'auto-login-link',
+      data: {'redirect_to': redirectTo},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
-    return response.data is Map
-        ? Map<String, dynamic>.from(response.data)
-        : <String, dynamic>{};
+    return response.data is Map ? response.data['url'] as String? : null;
   }
 
   Future<Options?> _authOptions() async {

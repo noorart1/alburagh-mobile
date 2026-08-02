@@ -209,51 +209,6 @@ class CartProvider with ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> checkout({
-    required Map<String, dynamic> billingAddress,
-    required Map<String, dynamic> shippingAddress,
-    String paymentMethod = 'cod',
-    String paymentMethodTitle = 'الدفع عند الاستلام',
-  }) async {
-    try {
-      _error = null;
-      _isLoading = true;
-      notifyListeners();
-
-      final response = await _apiService.checkoutOrder(
-        cartItems: _items
-            .map(
-              (item) => {
-                'product_id': item.product.id,
-                'quantity': item.quantity,
-              },
-            )
-            .toList(),
-        billingAddress: billingAddress,
-        shippingAddress: shippingAddress,
-        paymentMethod: paymentMethod,
-        paymentMethodTitle: paymentMethodTitle,
-      );
-
-      // Keep the authenticated WooCommerce cart in sync with the local state
-      // after the order has been created successfully.
-      await _apiService.clearCart();
-
-      _items.clear();
-      _serverTotal = 0;
-      _serverSubtotal = 0;
-      _isLoading = false;
-      notifyListeners();
-
-      return response;
-    } catch (e) {
-      _isLoading = false;
-      _error = 'فشل إتمام الطلب: $e';
-      notifyListeners();
-      rethrow;
-    }
-  }
-
   void clearError() {
     _error = null;
     notifyListeners();

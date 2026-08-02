@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -634,6 +635,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _showForgotPasswordDialog() async {
+    final emailController = TextEditingController(
+      text: _loginEmailController.text.contains('@')
+          ? _loginEmailController.text
+          : '',
+    );
+    final formKey = GlobalKey<FormState>();
+    bool loading = false;
+    String? error;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('استعادة كلمة المرور'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة تعيين كلمة المرور',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: emailController,
+                  enabled: !loading,
+                  autofocus: true,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    hintText: 'البريد الإلكتروني',
+                    prefixIcon: Icon(Icons.email_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'الرجاء إدخال البريد الإلكتروني';
+                    }
+                    return null;
+                  },
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(error!, style: const TextStyle(color: Colors.red)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: loading ? null : () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: loading
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+
+                      setDialogState(() {
+                        loading = true;
+                        error = null;
+                      });
+
+                      try {
+                        await _api.forgotPassword(emailController.text.trim());
+                        if (!dialogContext.mounted) return;
+                        Navigator.pop(dialogContext);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني',
+                            ),
+                          ),
+                        );
+                      } on DioException catch (e) {
+                        setDialogState(() {
+                          loading = false;
+                          error = e.response?.statusCode == 404
+                              ? 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني'
+                              : (e.response?.data?['message'] as String? ??
+                                  'تعذر إرسال طلب الاستعادة');
+                        });
+                      } catch (_) {
+                        setDialogState(() {
+                          loading = false;
+                          error = 'تعذر إرسال طلب الاستعادة';
+                        });
+                      }
+                    },
+              child: loading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('إرسال'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLoginScreen(AuthProvider authProvider) {
     return Scaffold(
       appBar: AppBar(
@@ -743,7 +850,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           horizontal: 16, vertical: 14),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: authProvider.isLoading
+                          ? null
+                          : _showForgotPasswordDialog,
+                      child: Text(
+                        'نسيت كلمة المرور؟',
+                        style: TextStyle(color: primaryColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: authProvider.isLoading
                         ? null

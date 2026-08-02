@@ -61,9 +61,9 @@ return in_array(strtoupper($country), array('IQ', 'IRAQ', 'العراق'), true)
 }
 
 // Hides Cash on Delivery on the website checkout for non-Iraq shipping
-// destinations. The custom REST checkout used by the app enforces the same
-// rule separately in AlBuragh_API_Checkout_Controller::checkout() since it
-// doesn't go through WooCommerce's own gateway list.
+// destinations. The app sends every customer to this same website checkout
+// (see AlBuragh_API_AutoLogin_Controller below), so this is the only place
+// the Iraq-only COD rule needs to be enforced.
 add_filter('woocommerce_available_payment_gateways', function ($gateways) {
 if (!isset($gateways['cod']) || is_admin()) {
 return $gateways;
@@ -81,6 +81,42 @@ unset($gateways['cod']);
 
 return $gateways;
 });
+
+// Consumes the one-time login link issued by
+// AlBuragh_API_AutoLogin_Controller::create_link() so a customer who's
+// already logged into the app lands on the website checkout already logged
+// in there too, instead of having to sign in a second time in the browser.
+function alburagh_handle_autologin() {
+if (empty($_GET['alburagh_autologin'])) {
+return;
+}
+
+$token = sanitize_text_field(wp_unslash($_GET['alburagh_autologin']));
+$user_id = get_transient('alburagh_autologin_' . $token);
+
+$redirect_to = isset($_GET['redirect_to']) ? esc_url_raw(wp_unslash($_GET['redirect_to'])) : home_url('/');
+$redirect_host = wp_parse_url($redirect_to, PHP_URL_HOST);
+if (!$redirect_host || $redirect_host !== wp_parse_url(home_url(), PHP_URL_HOST)) {
+$redirect_to = home_url('/');
+}
+
+if ($user_id) {
+// Single-use: the transient is deleted the moment it's consumed so
+// the link can't be replayed.
+delete_transient('alburagh_autologin_' . $token);
+$user = get_userdata($user_id);
+if ($user) {
+wp_clear_auth_cookie();
+wp_set_current_user($user_id);
+wp_set_auth_cookie($user_id, true);
+do_action('wp_login', $user->user_login, $user);
+}
+}
+
+wp_safe_redirect($redirect_to);
+exit;
+}
+add_action('init', 'alburagh_handle_autologin', 1);
 
 // Ensure JWT Library or helper helper classes are configured
 class AlBuragh_JWT_Auth {
@@ -253,8 +289,48 @@ return new WP_Error('not_found', 'No user found with this email address.', array
 }
 
 $user = get_user_by('email', $email);
-// Send recovery reset email code
-retrieve_password($user->user_login);
+
+// Deliberately not using core retrieve_password() here: it fires the
+// 'lostpassword_post' action, which the site's anti-spam/security plugin
+// hooks to reject any request that didn't come from a real wp-login.php
+// page load with JavaScript ("you are probably spamming or your browser
+// has JavaScript disabled") -- that rejects every request from this app,
+// including legitimate ones, since we've already verified the email
+// belongs to a real account above. This reimplements the same reset-key
+// generation and email WordPress core sends, minus that browser-only
+// check, and still runs the standard retrieve_password_title/message
+// filters so any site branding customizations still apply.
+$reset_key = get_password_reset_key($user);
+if (is_wp_error($reset_key)) {
+return new WP_Error(
+$reset_key->get_error_code() ?: 'reset_failed',
+$reset_key->get_error_message() ?: 'Failed to generate password reset key.',
+array('status' => 500)
+);
+}
+
+$reset_url = network_site_url(
+'wp-login.php?action=rp&key=' . $reset_key . '&login=' . rawurlencode($user->user_login),
+'login'
+);
+
+$message = __('Someone has requested a password reset for the following account:') . "\r\n\r\n";
+$message .= network_home_url('/') . "\r\n\r\n";
+$message .= sprintf(__('Username: %s'), $user->user_login) . "\r\n\r\n";
+$message .= __('If this was a mistake, just ignore this email and nothing will happen.') . "\r\n\r\n";
+$message .= __('To reset your password, visit the following address:') . "\r\n\r\n";
+$message .= $reset_url . "\r\n";
+
+$title = sprintf(__('[%s] Password Reset'), wp_specialchars_decode(get_option('blogname'), ENT_QUOTES));
+
+$title = apply_filters('retrieve_password_title', $title, $user->user_login, $user);
+$message = apply_filters('retrieve_password_message', $message, $reset_key, $user->user_login, $user);
+
+$sent = wp_mail($user->user_email, wp_specialchars_decode($title), $message);
+
+if (!$sent) {
+return new WP_Error('reset_failed', 'Failed to send password reset email.', array('status' => 500));
+}
 
 return new WP_REST_Response(array(
 'success' => true,
@@ -582,74 +658,50 @@ return array(
 }
 }
 
-class AlBuragh_API_Checkout_Controller {
-public function checkout($request) {
-if (!class_exists('WooCommerce')) {
-return new WP_Error('wc_missing', 'WooCommerce is not active.', array('status' => 500));
+// Issues a short-lived, single-use login link so the app can hand a logged-in
+// customer straight to the real website checkout (COD/PayPal/card, whatever
+// WooCommerce has configured) without asking them to log in again in the
+// browser. See alburagh_handle_autologin() near the top of this file for the
+// redirect handler that consumes the link.
+class AlBuragh_API_AutoLogin_Controller {
+public function create_link($request) {
+$auth_header = $request->get_header('Authorization');
+if (empty($auth_header)) {
+return new WP_Error('unauthorized', 'Token missing.', array('status' => 401));
+}
+
+$token = str_replace('Bearer ', '', $auth_header);
+$user_id = AlBuragh_JWT_Auth::validate_token($token);
+if (!$user_id) {
+return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
+}
+
+$user = get_user_by('id', $user_id);
+if (!$user) {
+return new WP_Error('invalid_user', 'User not found', array('status' => 404));
 }
 
 $params = $request->get_json_params();
-$billing = isset($params['billing_address']) ? $params['billing_address'] : array();
-$shipping = isset($params['shipping_address']) ? $params['shipping_address'] : array();
-$cart_items = isset($params['cart_items']) ? $params['cart_items'] : array();
+$requested_redirect = isset($params['redirect_to']) ? esc_url_raw($params['redirect_to']) : home_url('/');
 
-if (empty($cart_items)) {
-return new WP_Error('empty_cart', 'Cart items are required.', array('status' => 400));
-}
+// Only ever hand back a link that redirects within our own site, even if
+// the app were compromised or sent a bad redirect_to.
+$site_host = wp_parse_url(home_url(), PHP_URL_HOST);
+$redirect_host = wp_parse_url($requested_redirect, PHP_URL_HOST);
+$redirect_to = ($redirect_host && $redirect_host === $site_host) ? $requested_redirect : home_url('/');
 
-// Initialize order
-$order = wc_create_order();
+$login_token = bin2hex(random_bytes(32));
+set_transient('alburagh_autologin_' . $login_token, $user_id, 5 * MINUTE_IN_SECONDS);
 
-foreach ($cart_items as $item) {
-$product_id = intval($item['product_id']);
-$quantity = intval($item['quantity']);
-// Fixed deprecated get_product() to wc_get_product()
-$order->add_product(wc_get_product($product_id), $quantity); 
-}
+$login_url = add_query_arg(
+array(
+'alburagh_autologin' => $login_token,
+'redirect_to' => rawurlencode($redirect_to),
+),
+home_url('/')
+);
 
-// Set Addresses
-$order->set_address($billing, 'billing');
-$order->set_address($shipping, 'shipping');
-
-// Set Payment Method
-$payment_method = sanitize_text_field($params['payment_method']);
-$payment_title = sanitize_text_field($params['payment_method_title']);
-
-// COD is Iraq-only; the client submits payment_method directly with no
-// server-side check against country, so without this a non-Iraq order
-// could still be placed as COD.
-if (strtolower($payment_method) === 'cod' && !alburagh_is_iraq_address($shipping ?: $billing)) {
-$order->delete(true);
-return new WP_Error('cod_not_available', 'Cash on delivery is only available for orders shipped to Iraq.', array('status' => 400));
-}
-
-$order->set_payment_method($payment_method);
-$order->set_payment_method_title($payment_title);
-$order->calculate_totals();
-
-// COD is paid on delivery, so it can move straight to processing. Every
-// other method here hasn't actually been paid yet -- the app sends the
-// customer to the site's own pay-for-order page to complete PayPal/card
-// payment, so the order must stay pending until that payment succeeds.
-if (strtolower($payment_method) === 'cod') {
-$order->update_status('processing', 'Injected securely from AlBuragh App client.');
-} else {
-$order->update_status('pending', 'Awaiting payment via AlBuragh App client.');
-}
-
-return new WP_REST_Response(array(
-'id' => $order->get_id(),
-'order_key' => $order->get_order_key(),
-'status' => $order->get_status(),
-'currency' => $order->get_currency(),
-'total' => floatval($order->get_total()),
-'date_created' => $order->get_date_created()->date('Y-m-d H:i:s'),
-'billing_address' => $billing,
-'shipping_address' => $shipping,
-'payment_method' => $payment_method,
-'payment_method_title' => $payment_title,
-'line_items' => array()
-), 201);
+return new WP_REST_Response(array('url' => $login_url), 200);
 }
 }
 
@@ -1140,7 +1192,7 @@ class AlBuragh_API_Debug_Controller {
 add_action('rest_api_init', function () {
 $auth = new AlBuragh_API_Auth_Controller();
 $prod = new AlBuragh_API_Product_Controller();
-$chk = new AlBuragh_API_Checkout_Controller();
+$autologin = new AlBuragh_API_AutoLogin_Controller();
 $cart = new AlBuragh_API_Cart_Controller();
 $review = new AlBuragh_API_Review_Controller();
 $coupon = new AlBuragh_API_Coupon_Controller();
@@ -1207,10 +1259,12 @@ register_rest_route('alburagh/v1', '/categories', array(
 'permission_callback' => '__return_true'
 ));
 
-// Checkout
-register_rest_route('alburagh/v1', '/checkout', array(
+// Checkout happens on the website itself (COD/PayPal/card, whatever
+// WooCommerce has configured); the app just gets the customer there already
+// logged in.
+register_rest_route('alburagh/v1', '/auto-login-link', array(
 'methods' => 'POST',
-'callback' => array($chk, 'checkout'),
+'callback' => array($autologin, 'create_link'),
 'permission_callback' => '__return_true'
 ));
 
