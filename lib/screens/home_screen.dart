@@ -8,6 +8,7 @@ import '../core/theme/app_radius.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import '../providers/currency_provider.dart';
 import '../widgets/product_card.dart';
 import 'category_screen.dart';
 import 'search_screen.dart';
@@ -33,16 +34,29 @@ class _HomeScreenState extends State<HomeScreen> {
     'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh1.webp',
   ];
 
+  late final CurrencyProvider _currencyProvider;
+
   @override
   void initState() {
     super.initState();
+    _currencyProvider = context.read<CurrencyProvider>();
+    _currencyProvider.addListener(_onCurrencyChanged);
     loadData();
   }
 
+  @override
+  void dispose() {
+    _currencyProvider.removeListener(_onCurrencyChanged);
+    super.dispose();
+  }
+
+  void _onCurrencyChanged() => loadData();
+
   Future<void> loadData() async {
     try {
-      final featuredData = await _api.getFeaturedProducts();
-      final newArrivalsData = await _api.getNewArrivals();
+      final currency = _currencyProvider.currency;
+      final featuredData = await _api.getFeaturedProducts(currency: currency);
+      final newArrivalsData = await _api.getNewArrivals(currency: currency);
       final catData = await _api.getCategories();
 
       if (!mounted) return;

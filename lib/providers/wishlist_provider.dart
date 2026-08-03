@@ -17,6 +17,7 @@ class WishlistProvider with ChangeNotifier {
   final List<Product> _items = [];
   bool _isLoading = false;
   String? _error;
+  String _currency = 'USD';
 
   List<Product> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
@@ -25,13 +26,19 @@ class WishlistProvider with ChangeNotifier {
 
   bool isWishlisted(int productId) => _items.any((p) => p.id == productId);
 
+  void setCurrency(String currency) {
+    if (_currency == currency) return;
+    _currency = currency;
+    loadWishlist();
+  }
+
   Future<void> loadWishlist() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final data = await _apiService.getWishlist();
+      final data = await _apiService.getWishlist(currency: _currency);
       final rawItems = data['items'] as List<dynamic>? ?? [];
       _items.clear();
 
@@ -63,7 +70,10 @@ class WishlistProvider with ChangeNotifier {
       _error = null;
       _items.add(product);
       notifyListeners();
-      await _apiService.addToWishlist(productId: product.id);
+      await _apiService.addToWishlist(
+        productId: product.id,
+        currency: _currency,
+      );
       return true;
     } catch (e) {
       _items.removeWhere((p) => p.id == product.id);
@@ -80,7 +90,10 @@ class WishlistProvider with ChangeNotifier {
       _error = null;
       _items.removeWhere((p) => p.id == product.id);
       notifyListeners();
-      await _apiService.removeFromWishlist(productId: product.id);
+      await _apiService.removeFromWishlist(
+        productId: product.id,
+        currency: _currency,
+      );
       return true;
     } catch (e) {
       _items.addAll(removed);

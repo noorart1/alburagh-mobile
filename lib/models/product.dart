@@ -14,6 +14,7 @@ class Product {
   final String category;
   final double averageRating;
   final bool inStock;
+  final String currencySymbol;
 
   Product({
     required this.id,
@@ -29,6 +30,7 @@ class Product {
     this.category = '',
     this.averageRating = 0.0,
     this.inStock = true,
+    this.currencySymbol = '\$',
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -68,6 +70,7 @@ class Product {
       averageRating:
           double.tryParse(json['average_rating']?.toString() ?? '') ?? 0.0,
       inStock: json['stock_status']?.toString() != 'outofstock',
+      currencySymbol: json['currency_symbol']?.toString() ?? '\$',
     );
   }
 }

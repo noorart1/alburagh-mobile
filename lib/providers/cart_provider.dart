@@ -29,10 +29,21 @@ class CartProvider with ChangeNotifier {
   String? _error;
   double? _serverTotal;
   double? _serverSubtotal;
+  String _currency = 'USD';
+  String _currencySymbol = '\$';
 
   List<CartItem> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String get currencySymbol => _currencySymbol;
+
+  /// Called whenever the user's manual IQD/USD choice changes, so every
+  /// subsequent cart call asks the backend to convert to that currency.
+  void setCurrency(String currency) {
+    if (_currency == currency) return;
+    _currency = currency;
+    loadCart();
+  }
 
   int get itemCount => _items.fold<int>(0, (sum, item) => sum + item.quantity);
 
@@ -53,23 +64,17 @@ class CartProvider with ChangeNotifier {
         0;
   }
 
-  String _formatPrice(double price) {
-    if (price == price.roundToDouble()) {
-      return price.toInt().toString();
-    }
-    return price.toStringAsFixed(2);
-  }
-
   Future<void> loadCart() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final cartData = await _apiService.getCart();
+      final cartData = await _apiService.getCart(currency: _currency);
       final items = cartData['items'] as List<dynamic>? ?? [];
       _serverTotal = double.tryParse(cartData['total']?.toString() ?? '');
       _serverSubtotal = double.tryParse(cartData['subtotal']?.toString() ?? '');
+      _currencySymbol = cartData['currency_symbol']?.toString() ?? '\$';
       _items.clear();
 
       for (final item in items) {
@@ -109,7 +114,11 @@ class CartProvider with ChangeNotifier {
   Future<bool> addToCart(Product product, {int quantity = 1}) async {
     try {
       _error = null;
-      await _apiService.addToCart(productId: product.id, quantity: quantity);
+      await _apiService.addToCart(
+        productId: product.id,
+        quantity: quantity,
+        currency: _currency,
+      );
       await loadCart();
       return true;
     } catch (e) {
@@ -125,6 +134,7 @@ class CartProvider with ChangeNotifier {
         await _apiService.addToCart(
           productId: item.product.id,
           quantity: item.quantity,
+          currency: _currency,
         );
       }
       await loadCart();
@@ -143,7 +153,11 @@ class CartProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      await _apiService.updateCart(cartItemKey: cartItem.key, quantity: 0);
+      await _apiService.updateCart(
+        cartItemKey: cartItem.key,
+        quantity: 0,
+        currency: _currency,
+      );
       await loadCart();
       return true;
     } catch (e) {
@@ -171,6 +185,7 @@ class CartProvider with ChangeNotifier {
       await _apiService.updateCart(
         cartItemKey: cartItem.key,
         quantity: quantity,
+        currency: _currency,
       );
       await loadCart();
       return true;
@@ -188,7 +203,7 @@ class CartProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      await _apiService.clearCart();
+      await _apiService.clearCart(currency: _currency);
       _items.clear();
       _serverTotal = 0;
       _serverSubtotal = 0;
@@ -205,6 +220,4 @@ class CartProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
   }
-
-  String formatPrice(double price) => _formatPrice(price);
 }

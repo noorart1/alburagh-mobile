@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../models/product.dart';
@@ -134,7 +135,10 @@ class ProductCard extends StatelessWidget {
                     const Spacer(),
                     if (hasDiscount)
                       Text(
-                        '\$${product.regularPrice}',
+                        CurrencyUtils.formatString(
+                          product.regularPrice,
+                          product.currencySymbol,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -147,7 +151,10 @@ class ProductCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '\$${product.price}',
+                          CurrencyUtils.formatString(
+                            product.price,
+                            product.currencySymbol,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

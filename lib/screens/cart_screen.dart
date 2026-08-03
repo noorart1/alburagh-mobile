@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
+import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
@@ -142,7 +143,10 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                         ),
                         Text(
-                          '${cart.formatPrice(cart.totalPrice)} دولار',
+                          CurrencyUtils.format(
+                            cart.totalPrice,
+                            cart.currencySymbol,
+                          ),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,

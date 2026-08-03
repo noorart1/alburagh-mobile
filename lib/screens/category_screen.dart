@@ -5,6 +5,7 @@ import '../core/theme/app_colors.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import '../providers/currency_provider.dart';
 import '../widgets/product_card.dart';
 
 class CategoryScreen extends StatefulWidget {
@@ -30,19 +31,26 @@ class _CategoryScreenState extends State<CategoryScreen> {
   String sortBy = 'newest';
   String searchQuery = '';
 
+  late final CurrencyProvider _currencyProvider;
+
   @override
   void initState() {
     super.initState();
+    _currencyProvider = context.read<CurrencyProvider>();
+    _currencyProvider.addListener(_onCurrencyChanged);
     loadProducts();
     _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _currencyProvider.removeListener(_onCurrencyChanged);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
+
+  void _onCurrencyChanged() => loadProducts();
 
   void _onScroll() {
     if (!hasMore || isLoadingMore || isLoading) return;
@@ -60,6 +68,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         category: widget.category.slug ?? widget.category.id.toString(),
         page: 1,
         perPage: _perPage,
+        currency: _currencyProvider.currency,
       );
       if (!mounted) return;
       setState(() {
@@ -90,6 +99,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         category: widget.category.slug ?? widget.category.id.toString(),
         page: nextPage,
         perPage: _perPage,
+        currency: _currencyProvider.currency,
       );
       if (!mounted) return;
       setState(() {

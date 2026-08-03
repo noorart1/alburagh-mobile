@@ -80,10 +80,12 @@ class ApiService {
     int page = 1,
     int perPage = 20,
     String? category,
+    String? currency,
   }) async {
     final Map<String, dynamic> queryParams = {
       'page': page,
       'per_page': perPage,
+      if (currency != null) 'currency': currency,
     };
     if (category != null && category.isNotEmpty) {
       queryParams['category'] = int.tryParse(category) ?? category;
@@ -92,23 +94,35 @@ class ApiService {
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
-  Future<List<dynamic>> getFeaturedProducts() async {
-    final response = await _dio.get('featured-products');
+  Future<List<dynamic>> getFeaturedProducts({String? currency}) async {
+    final response = await _dio.get(
+      'featured-products',
+      queryParameters: {if (currency != null) 'currency': currency},
+    );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
-  Future<List<dynamic>> getNewArrivals() async {
-    final response = await _dio.get('new-arrivals');
+  Future<List<dynamic>> getNewArrivals({String? currency}) async {
+    final response = await _dio.get(
+      'new-arrivals',
+      queryParameters: {if (currency != null) 'currency': currency},
+    );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
-  Future<List<dynamic>> getSaleProducts() async {
-    final response = await _dio.get('sale-products');
+  Future<List<dynamic>> getSaleProducts({String? currency}) async {
+    final response = await _dio.get(
+      'sale-products',
+      queryParameters: {if (currency != null) 'currency': currency},
+    );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
-  Future<List<dynamic>> searchProducts(String query) async {
-    final response = await _dio.get('search', queryParameters: {'q': query});
+  Future<List<dynamic>> searchProducts(String query, {String? currency}) async {
+    final response = await _dio.get(
+      'search',
+      queryParameters: {'q': query, if (currency != null) 'currency': currency},
+    );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
@@ -223,9 +237,13 @@ class ApiService {
     return Options(headers: {'Authorization': 'Bearer $token'});
   }
 
-  Future<Map<String, dynamic>> getCart() async {
+  Future<Map<String, dynamic>> getCart({String? currency}) async {
     try {
-      final response = await _dio.get('cart', options: await _authOptions());
+      final response = await _dio.get(
+        'cart',
+        queryParameters: {if (currency != null) 'currency': currency},
+        options: await _authOptions(),
+      );
       return response.data is Map
           ? Map<String, dynamic>.from(response.data)
           : <String, dynamic>{};
@@ -243,10 +261,12 @@ class ApiService {
   Future<Map<String, dynamic>> addToCart({
     required int productId,
     int quantity = 1,
+    String? currency,
   }) async {
     final response = await _dio.post(
       'cart',
       data: {'product_id': productId, 'quantity': quantity},
+      queryParameters: {if (currency != null) 'currency': currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -257,10 +277,12 @@ class ApiService {
   Future<Map<String, dynamic>> updateCart({
     required String cartItemKey,
     required int quantity,
+    String? currency,
   }) async {
     final response = await _dio.put(
       'cart',
       data: {'cart_item_key': cartItemKey, 'quantity': quantity},
+      queryParameters: {if (currency != null) 'currency': currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -268,17 +290,22 @@ class ApiService {
         : <String, dynamic>{};
   }
 
-  Future<Map<String, dynamic>> clearCart() async {
-    final response = await _dio.delete('cart', options: await _authOptions());
+  Future<Map<String, dynamic>> clearCart({String? currency}) async {
+    final response = await _dio.delete(
+      'cart',
+      queryParameters: {if (currency != null) 'currency': currency},
+      options: await _authOptions(),
+    );
     return response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};
   }
 
-  Future<Map<String, dynamic>> getWishlist() async {
+  Future<Map<String, dynamic>> getWishlist({String? currency}) async {
     try {
       final response = await _dio.get(
         'wishlist',
+        queryParameters: {if (currency != null) 'currency': currency},
         options: await _authOptions(),
       );
       return response.data is Map
@@ -292,10 +319,14 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> addToWishlist({required int productId}) async {
+  Future<Map<String, dynamic>> addToWishlist({
+    required int productId,
+    String? currency,
+  }) async {
     final response = await _dio.post(
       'wishlist',
       data: {'product_id': productId},
+      queryParameters: {if (currency != null) 'currency': currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -305,10 +336,12 @@ class ApiService {
 
   Future<Map<String, dynamic>> removeFromWishlist({
     required int productId,
+    String? currency,
   }) async {
     final response = await _dio.delete(
       'wishlist',
       data: {'product_id': productId},
+      queryParameters: {if (currency != null) 'currency': currency},
       options: await _authOptions(),
     );
     return response.data is Map

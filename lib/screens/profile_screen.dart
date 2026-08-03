@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
+import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/cart_provider.dart';
+import '../providers/currency_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
@@ -372,7 +374,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           _CartSummary(
             itemCount: cart.itemCount,
-            totalPrice: cart.formatPrice(cart.totalPrice),
+            totalPrice: CurrencyUtils.format(
+              cart.totalPrice,
+              cart.currencySymbol,
+            ),
             onOpenCart: () {
               Navigator.push(
                 context,
@@ -642,6 +647,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   );
                 },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _ProfileSection(
+            title: 'العملة',
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'USD', label: Text('USD (\$)')),
+                    ButtonSegment(value: 'IQD', label: Text('IQD (د.ع)')),
+                  ],
+                  selected: {context.watch<CurrencyProvider>().currency},
+                  onSelectionChanged: (selection) {
+                    context.read<CurrencyProvider>().setCurrency(
+                      selection.first,
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -1076,7 +1102,7 @@ class _CartSummary extends StatelessWidget {
             child: Icon(Icons.shopping_cart_outlined, color: primaryColor),
           ),
           title: Text('$itemCount منتج في السلة'),
-          subtitle: Text('المجموع: $totalPrice دولار'),
+          subtitle: Text('المجموع: $totalPrice'),
           trailing: const Icon(Icons.chevron_left),
           onTap: onOpenCart,
         ),

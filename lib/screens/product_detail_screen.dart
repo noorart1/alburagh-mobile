@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/product.dart';
@@ -67,7 +68,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '\$${widget.product.price}',
+                        CurrencyUtils.formatString(
+                          widget.product.price,
+                          widget.product.currencySymbol,
+                        ),
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -80,7 +84,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text(
-                            '\$${widget.product.regularPrice}',
+                            CurrencyUtils.formatString(
+                              widget.product.regularPrice,
+                              widget.product.currencySymbol,
+                            ),
                             style: const TextStyle(
                               fontSize: 16,
                               color: AppColors.textMuted,

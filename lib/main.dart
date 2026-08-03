@@ -6,23 +6,45 @@ import 'core/theme/app_colors.dart';
 import 'core/theme/app_radius.dart';
 import 'providers/cart_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/currency_provider.dart';
 import 'providers/wishlist_provider.dart';
 import 'screens/main_screen.dart';
 import 'screens/cart_screen.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final initialCurrency = await CurrencyProvider.loadInitial();
+  runApp(MyApp(initialCurrency: initialCurrency));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialCurrency;
+
+  const MyApp({super.key, required this.initialCurrency});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => CartProvider()),
-        ChangeNotifierProvider(create: (_) => WishlistProvider()),
+        ChangeNotifierProvider(
+          create: (_) => CurrencyProvider(initialCurrency: initialCurrency),
+        ),
+        ChangeNotifierProxyProvider<CurrencyProvider, CartProvider>(
+          create: (_) => CartProvider(),
+          update: (context, currencyProvider, cartProvider) {
+            final cart = cartProvider ?? CartProvider();
+            cart.setCurrency(currencyProvider.currency);
+            return cart;
+          },
+        ),
+        ChangeNotifierProxyProvider<CurrencyProvider, WishlistProvider>(
+          create: (_) => WishlistProvider(),
+          update: (context, currencyProvider, wishlistProvider) {
+            final wishlist = wishlistProvider ?? WishlistProvider();
+            wishlist.setCurrency(currencyProvider.currency);
+            return wishlist;
+          },
+        ),
         ChangeNotifierProxyProvider<CartProvider, AuthProvider>(
           create: (context) =>
               AuthProvider(Provider.of<CartProvider>(context, listen: false)),

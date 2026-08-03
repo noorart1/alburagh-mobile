@@ -11,6 +11,70 @@ if ( ! defined( 'ABSPATH' ) ) {
 exit; // Prevent direct access
 }
 
+// This store's Multi Currency plugin (VillaTheme) has its global IQD
+// exchange rate configured as "1" — i.e. it does NOT calculate IQD prices
+// from a rate at all. Instead each product carries its own fixed IQD price,
+// set by the admin and stored as JSON in post meta, e.g.
+// _regular_price_wmcp => {"IQD":"11000"}, _sale_price_wmcp => {"IQD":"9000"}
+// (confirmed via GET /debug/currency?product_id=... against a real
+// product). Returns null — never a guessed/calculated number — if this
+// product has no fixed price set for $currency yet, so callers fall back
+// to plain USD rather than silently showing a wrong amount.
+function alburagh_get_fixed_price($product_id, $meta_key, $currency) {
+if (!$product_id) {
+return null;
+}
+
+$raw = get_post_meta($product_id, $meta_key, true);
+if (empty($raw)) {
+return null;
+}
+
+$decoded = json_decode($raw, true);
+if (!is_array($decoded) || !isset($decoded[$currency]) || $decoded[$currency] === '') {
+return null;
+}
+
+return floatval($decoded[$currency]);
+}
+
+// Shared by every endpoint that returns product prices. $currency is
+// whatever the app sent via ?currency=IQD|USD (defaults to USD).
+// $product_id/$meta_key are needed to look up the fixed IQD override above
+// — pass $meta_key = '_regular_price_wmcp' for a product's regular price,
+// '_sale_price_wmcp' for its sale price. The 'converted' flag lets the app
+// know if this came from a real fixed price or silently fell back to
+// unconverted USD (e.g. this product has no IQD price set yet).
+function alburagh_format_price_for_currency($usd_amount, $currency, $product_id = 0, $meta_key = '_regular_price_wmcp') {
+$currency = strtoupper((string) $currency);
+
+if ($currency === 'IQD') {
+$fixed = alburagh_get_fixed_price($product_id, $meta_key, 'IQD');
+if ($fixed !== null) {
+return array(
+'amount' => $fixed,
+'currency' => 'IQD',
+'symbol' => 'د.ع',
+'converted' => true,
+);
+}
+
+return array(
+'amount' => floatval($usd_amount),
+'currency' => 'USD',
+'symbol' => '$',
+'converted' => false,
+);
+}
+
+return array(
+'amount' => floatval($usd_amount),
+'currency' => 'USD',
+'symbol' => '$',
+'converted' => true,
+);
+}
+
 // CORS: the Flutter web build calls this API cross-origin from the browser
 // (mobile/desktop builds aren't subject to CORS, which is why this only
 // broke on `flutter run -d chrome`). WordPress core normally sends
@@ -488,6 +552,11 @@ public function update_profile($request) {
 }
 
 class AlBuragh_API_Product_Controller {
+private function currency_from_request($request) {
+$currency = $request->get_param('currency');
+return $currency ? strtoupper(sanitize_text_field($currency)) : 'USD';
+}
+
 public function get_products($request) {
 if (!class_exists('WooCommerce')) {
 return new WP_Error('wc_missing', 'WooCommerce is not active.', array('status' => 500));
@@ -532,10 +601,11 @@ array(
 
 $query = new WP_Query($args);
 $products = array();
+$currency = $this->currency_from_request($request);
 
 foreach ($query->posts as $post) {
 $product = wc_get_product($post->ID);
-$products[] = $this->format_product($product);
+$products[] = $this->format_product($product, $currency);
 }
 
 return new WP_REST_Response($products, 200);
@@ -556,10 +626,11 @@ array(
 
 $query = new WP_Query($args);
 $products = array();
+$currency = $this->currency_from_request($request);
 
 foreach ($query->posts as $post) {
 $product = wc_get_product($post->ID);
-$products[] = $this->format_product($product);
+$products[] = $this->format_product($product, $currency);
 }
 
 return new WP_REST_Response($products, 200);
@@ -575,10 +646,11 @@ $args = array(
 
 $query = new WP_Query($args);
 $products = array();
+$currency = $this->currency_from_request($request);
 
 foreach ($query->posts as $post) {
 $product = wc_get_product($post->ID);
-$products[] = $this->format_product($product);
+$products[] = $this->format_product($product, $currency);
 }
 
 return new WP_REST_Response($products, 200);
@@ -593,10 +665,11 @@ $args = array(
 
 $query = new WP_Query($args);
 $products = array();
+$currency = $this->currency_from_request($request);
 
 foreach ($query->posts as $post) {
 $product = wc_get_product($post->ID);
-$products[] = $this->format_product($product);
+$products[] = $this->format_product($product, $currency);
 }
 
 return new WP_REST_Response($products, 200);
@@ -617,10 +690,11 @@ $args = array(
 
 $query = new WP_Query($args);
 $products = array();
+$currency = $this->currency_from_request($request);
 
 foreach ($query->posts as $post) {
 $product = wc_get_product($post->ID);
-$products[] = $this->format_product($product);
+$products[] = $this->format_product($product, $currency);
 }
 
 return new WP_REST_Response($products, 200);
@@ -650,7 +724,7 @@ $categories[] = array(
 return new WP_REST_Response($categories, 200);
 }
 
-private function format_product($product) {
+private function format_product($product, $currency = 'USD') {
 $image_ids = $product->get_gallery_image_ids();
 $images = array();
 $featured_src = wp_get_attachment_url($product->get_image_id());
@@ -675,6 +749,27 @@ $cats[] = array('id' => $term->term_id, 'name' => $term->name, 'slug' => $term->
 }
 }
 
+$price_info = alburagh_format_price_for_currency(
+$product->get_price(),
+$currency,
+$product->get_id(),
+$product->is_on_sale() ? '_sale_price_wmcp' : '_regular_price_wmcp'
+);
+$regular_price_info = alburagh_format_price_for_currency(
+$product->get_regular_price(),
+$currency,
+$product->get_id(),
+'_regular_price_wmcp'
+);
+$sale_price_info = $product->get_sale_price()
+? alburagh_format_price_for_currency(
+$product->get_sale_price(),
+$currency,
+$product->get_id(),
+'_sale_price_wmcp'
+)
+: null;
+
 return array(
 'id' => $product->get_id(),
 'name' => $product->get_name(),
@@ -684,9 +779,11 @@ return array(
 'button_text' => $product->get_type() === 'external' ? $product->get_button_text() : '',
 'description' => $product->get_description(),
 'short_description' => $product->get_short_description(),
-'price' => floatval($product->get_price()),
-'regular_price' => floatval($product->get_regular_price()),
-'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
+'price' => $price_info['amount'],
+'regular_price' => $regular_price_info['amount'],
+'sale_price' => $sale_price_info !== null ? $sale_price_info['amount'] : null,
+'currency' => $price_info['currency'],
+'currency_symbol' => $price_info['symbol'],
 'on_sale' => $product->is_on_sale(),
 'stock_status' => $product->get_stock_status(),
 'stock_quantity' => $product->get_stock_quantity(),
@@ -781,7 +878,12 @@ private function get_user_id_from_request($request) {
   return 0;
 }
 
-private function product_payload($product) {
+private function currency_from_request($request) {
+$currency = $request->get_param('currency');
+return $currency ? strtoupper(sanitize_text_field($currency)) : 'USD';
+}
+
+private function product_payload($product, $currency = 'USD') {
 $image_ids = $product->get_gallery_image_ids();
 $images = array();
 $featured_src = wp_get_attachment_url($product->get_image_id());
@@ -805,15 +907,38 @@ $categories[] = array('id' => $term->term_id, 'name' => $term->name, 'slug' => $
 }
 }
 
+$price_info = alburagh_format_price_for_currency(
+$product->get_price(),
+$currency,
+$product->get_id(),
+$product->is_on_sale() ? '_sale_price_wmcp' : '_regular_price_wmcp'
+);
+$regular_price_info = alburagh_format_price_for_currency(
+$product->get_regular_price(),
+$currency,
+$product->get_id(),
+'_regular_price_wmcp'
+);
+$sale_price_info = $product->get_sale_price()
+? alburagh_format_price_for_currency(
+$product->get_sale_price(),
+$currency,
+$product->get_id(),
+'_sale_price_wmcp'
+)
+: null;
+
 return array(
 'id' => $product->get_id(),
 'name' => $product->get_name(),
 'sku' => $product->get_sku(),
 'description' => $product->get_description(),
 'short_description' => $product->get_short_description(),
-'price' => floatval($product->get_price()),
-'regular_price' => floatval($product->get_regular_price()),
-'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
+'price' => $price_info['amount'],
+'regular_price' => $regular_price_info['amount'],
+'sale_price' => $sale_price_info !== null ? $sale_price_info['amount'] : null,
+'currency' => $price_info['currency'],
+'currency_symbol' => $price_info['symbol'],
 'on_sale' => $product->is_on_sale(),
 'stock_status' => $product->get_stock_status(),
 'stock_quantity' => $product->get_stock_quantity(),
@@ -876,6 +1001,7 @@ wp_set_current_user($previous_user_id);
 public function get_cart($request) {
 $user_id = $this->get_user_id_from_request($request);
 $previous_user_id = $this->begin_user_context($user_id);
+$currency = $this->currency_from_request($request);
 
 $this->init_wc_cart();
 if (!WC()->cart) {
@@ -884,25 +1010,61 @@ return new WP_Error('cart_error', 'Cart not initialized.', array('status' => 500
 }
 
 $cart_items = array();
+$running_total = 0;
+$all_converted = true;
+
 foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
 $product = $cart_item['data'];
+$quantity = $cart_item['quantity'];
+$meta_key = $product->is_on_sale() ? '_sale_price_wmcp' : '_regular_price_wmcp';
+$unit_price_info = alburagh_format_price_for_currency($product->get_price(), $currency, $product->get_id(), $meta_key);
+$line_total_amount = $unit_price_info['amount'] * $quantity;
+
+if (!$unit_price_info['converted']) {
+$all_converted = false;
+}
 
 $cart_items[] = array(
 'key' => $cart_item_key,
 'product_id' => $product->get_id(),
 'name' => $product->get_name(),
-'quantity' => $cart_item['quantity'],
-'price' => floatval($product->get_price()),
-'total' => floatval($cart_item['line_total']),
+'quantity' => $quantity,
+'price' => $unit_price_info['amount'],
+'total' => $line_total_amount,
+'currency' => $unit_price_info['currency'],
+'currency_symbol' => $unit_price_info['symbol'],
 'image' => wp_get_attachment_url($product->get_image_id()),
-'product' => $this->product_payload($product)
+'product' => $this->product_payload($product, $currency)
 );
+
+$running_total += $line_total_amount;
+}
+
+// Fixed per-product IQD prices mean the cart total has to be summed from
+// each line's own fixed price rather than converting WooCommerce's own
+// USD total (there's no global rate to convert that with — see
+// alburagh_get_fixed_price above). Falls back to WooCommerce's own USD
+// total/subtotal (which already account for any fees/discounts a manual
+// sum wouldn't) if even one item has no fixed IQD price set yet, rather
+// than showing a silently-wrong mixed-currency sum.
+if (strtoupper($currency) === 'IQD' && $all_converted && !empty($cart_items)) {
+$total_amount = $running_total;
+$subtotal_amount = $running_total;
+$response_currency = 'IQD';
+$response_symbol = 'د.ع';
+} else {
+$total_amount = floatval(WC()->cart->get_total('edit'));
+$subtotal_amount = floatval(WC()->cart->get_subtotal());
+$response_currency = 'USD';
+$response_symbol = '$';
 }
 
 $response = new WP_REST_Response(array(
 'items' => $cart_items,
-'total' => floatval(WC()->cart->get_total('edit')),
-'subtotal' => floatval(WC()->cart->get_subtotal())
+'total' => $total_amount,
+'subtotal' => $subtotal_amount,
+'currency' => $response_currency,
+'currency_symbol' => $response_symbol
 ), 200);
 
 $this->end_user_context($previous_user_id);
@@ -1000,7 +1162,12 @@ $user_id = AlBuragh_JWT_Auth::validate_token($token);
 return $user_id ? intval($user_id) : 0;
 }
 
-private function product_payload($product) {
+private function currency_from_request($request) {
+$currency = $request->get_param('currency');
+return $currency ? strtoupper(sanitize_text_field($currency)) : 'USD';
+}
+
+private function product_payload($product, $currency = 'USD') {
 $image_ids = $product->get_gallery_image_ids();
 $images = array();
 $featured_src = wp_get_attachment_url($product->get_image_id());
@@ -1024,15 +1191,38 @@ $categories[] = array('id' => $term->term_id, 'name' => $term->name, 'slug' => $
 }
 }
 
+$price_info = alburagh_format_price_for_currency(
+$product->get_price(),
+$currency,
+$product->get_id(),
+$product->is_on_sale() ? '_sale_price_wmcp' : '_regular_price_wmcp'
+);
+$regular_price_info = alburagh_format_price_for_currency(
+$product->get_regular_price(),
+$currency,
+$product->get_id(),
+'_regular_price_wmcp'
+);
+$sale_price_info = $product->get_sale_price()
+? alburagh_format_price_for_currency(
+$product->get_sale_price(),
+$currency,
+$product->get_id(),
+'_sale_price_wmcp'
+)
+: null;
+
 return array(
 'id' => $product->get_id(),
 'name' => $product->get_name(),
 'sku' => $product->get_sku(),
 'description' => $product->get_description(),
 'short_description' => $product->get_short_description(),
-'price' => floatval($product->get_price()),
-'regular_price' => floatval($product->get_regular_price()),
-'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
+'price' => $price_info['amount'],
+'regular_price' => $regular_price_info['amount'],
+'sale_price' => $sale_price_info !== null ? $sale_price_info['amount'] : null,
+'currency' => $price_info['currency'],
+'currency_symbol' => $price_info['symbol'],
 'on_sale' => $product->is_on_sale(),
 'stock_status' => $product->get_stock_status(),
 'stock_quantity' => $product->get_stock_quantity(),
@@ -1081,6 +1271,7 @@ if (!$user_id) {
 return new WP_REST_Response(array('items' => array()), 200);
 }
 
+$currency = $this->currency_from_request($request);
 $wishlist_id = $this->get_or_create_wishlist_id($user_id);
 $items_table = $wpdb->prefix . 'yith_wcwl';
 
@@ -1093,7 +1284,7 @@ $items = array();
 foreach ($rows as $row) {
 $product = wc_get_product($row->prod_id);
 if ($product) {
-$items[] = array('product' => $this->product_payload($product));
+$items[] = array('product' => $this->product_payload($product, $currency));
 }
 }
 
@@ -1476,6 +1667,95 @@ class AlBuragh_API_Debug_Controller {
 
     return new WP_REST_Response($result, 200);
   }
+
+  // Verifies the assumptions alburagh_get_fixed_price()/
+  // alburagh_format_price_for_currency() make about the VillaTheme "Multi
+  // Currency for WooCommerce" plugin's per-product fixed pricing, since
+  // that plugin's source isn't available to check ahead of time. Hits a
+  // test USD amount through the same conversion path every price field
+  // in the app uses, so a wrong guess about the plugin's classes/methods
+  // shows up here instead of as a silently-wrong price in the app.
+  public function debug_currency($request) {
+    $test_amount = 10;
+
+    $result = array(
+      'test_usd_amount' => $test_amount,
+      'woomulti_currency_class_exists' => class_exists('WOOMULTI_CURRENCY_F_Data'),
+      'wmc_get_price_function_exists' => function_exists('wmc_get_price'),
+    );
+
+    if ($result['woomulti_currency_class_exists']) {
+      $wmc = WOOMULTI_CURRENCY_F_Data::get_ins();
+      $result['woomulti_currency_instance_class'] = is_object($wmc) ? get_class($wmc) : null;
+
+      if (is_object($wmc)) {
+        // Confirmed real methods (from a prior introspection dump), tried
+        // defensively since we still don't have the plugin's source to
+        // check exact signatures against.
+        if (method_exists($wmc, 'get_current_currency')) {
+          $result['current_currency'] = $wmc->get_current_currency();
+        }
+        if (method_exists($wmc, 'get_default_currency')) {
+          $result['default_currency'] = $wmc->get_default_currency();
+        }
+        if (method_exists($wmc, 'get_list_currencies')) {
+          $result['currency_list'] = $wmc->get_list_currencies();
+        }
+        if (method_exists($wmc, 'get_currencies')) {
+          $result['currencies'] = $wmc->get_currencies();
+        }
+        if (method_exists($wmc, 'get_exchange')) {
+          try {
+            $result['get_exchange_IQD'] = $wmc->get_exchange('IQD');
+          } catch (\Throwable $e) {
+            $result['get_exchange_IQD_error'] = $e->getMessage();
+          }
+        }
+      }
+    }
+
+    if (function_exists('wmc_get_exchange_rate')) {
+      try {
+        $result['wmc_get_exchange_rate_IQD'] = wmc_get_exchange_rate('IQD');
+      } catch (\Throwable $e) {
+        $result['wmc_get_exchange_rate_IQD_error'] = $e->getMessage();
+      }
+    }
+
+    // Per-product fixed IQD prices (confirmed this is how this store prices
+    // Iraq customers, not a global exchange rate) — pass ?product_id=34259
+    // to inspect a real product's stored meta and find the actual key/
+    // method VillaTheme uses, instead of guessing a meta key name blind.
+    $product_id = intval($request->get_param('product_id'));
+    if ($product_id) {
+      $result['product_id'] = $product_id;
+      $result['product_exists'] = (bool) wc_get_product($product_id);
+      $result['product_all_meta_keys'] = array_keys(get_post_meta($product_id));
+      $result['product_regular_price_usd'] = get_post_meta($product_id, '_regular_price', true);
+      $result['regular_price_wmcp_raw'] = get_post_meta($product_id, '_regular_price_wmcp', true);
+      $result['sale_price_wmcp_raw'] = get_post_meta($product_id, '_sale_price_wmcp', true);
+
+      if (isset($wmc) && is_object($wmc) && method_exists($wmc, 'check_fixed_price')) {
+        try {
+          $result['check_fixed_price_IQD'] = $wmc->check_fixed_price($product_id, 'IQD');
+        } catch (\Throwable $e) {
+          $result['check_fixed_price_IQD_error'] = $e->getMessage();
+        }
+      }
+    }
+
+    $result['fixed_iqd_price_for_product'] = $product_id
+      ? alburagh_get_fixed_price($product_id, '_regular_price_wmcp', 'IQD')
+      : null;
+    $result['full_price_info'] = alburagh_format_price_for_currency(
+      $test_amount,
+      'IQD',
+      $product_id,
+      '_regular_price_wmcp'
+    );
+
+    return new WP_REST_Response($result, 200);
+  }
 }
 
 // 3. SECURE ENDPOINTS ROUTING SETUP
@@ -1664,6 +1944,12 @@ register_rest_route('alburagh/v1', '/debug/cart', array(
 register_rest_route('alburagh/v1', '/debug/wishlist', array(
 'methods' => 'GET',
 'callback' => array($debug, 'debug_wishlist'),
+'permission_callback' => '__return_true'
+));
+
+register_rest_route('alburagh/v1', '/debug/currency', array(
+'methods' => 'GET',
+'callback' => array($debug, 'debug_currency'),
 'permission_callback' => '__return_true'
 ));
 });

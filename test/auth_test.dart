@@ -8,13 +8,17 @@ import 'package:alburagh_app/screens/register_screen.dart';
 
 void main() {
   group('Login Screen Tests', () {
-    testWidgets('should display login form elements', (WidgetTester tester) async {
+    testWidgets('should display login form elements', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const LoginScreen(),
           ),
@@ -31,13 +35,17 @@ void main() {
       expect(find.textContaining('أنشئ حساب'), findsOneWidget);
     });
 
-    testWidgets('should show/hide password when toggle clicked', (WidgetTester tester) async {
+    testWidgets('should show/hide password when toggle clicked', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const LoginScreen(),
           ),
@@ -56,7 +64,9 @@ void main() {
       expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
     });
 
-    testWidgets('should disable fields when loading', (WidgetTester tester) async {
+    testWidgets('should disable fields when loading', (
+      WidgetTester tester,
+    ) async {
       final cartProvider = CartProvider();
       final authProvider = AuthProvider(cartProvider);
 
@@ -77,13 +87,17 @@ void main() {
   });
 
   group('Register Screen Tests', () {
-    testWidgets('should display register form elements', (WidgetTester tester) async {
+    testWidgets('should display register form elements', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const RegisterScreen(),
           ),
@@ -92,7 +106,10 @@ void main() {
 
       expect(find.text('إنشاء حساب'), findsOneWidget);
       expect(find.text('أنشئ حسابك الجديد'), findsOneWidget);
-      expect(find.text('أدخل بياناتك لإنشاء حساب في دار البراق'), findsOneWidget);
+      expect(
+        find.text('أدخل بياناتك لإنشاء حساب في دار البراق'),
+        findsOneWidget,
+      );
       expect(find.byType(TextFormField), findsNWidgets(5));
       expect(find.text('إنشاء الحساب'), findsOneWidget);
       expect(find.textContaining('لديك حساب'), findsOneWidget);
@@ -105,7 +122,9 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const RegisterScreen(),
           ),
@@ -126,7 +145,9 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const RegisterScreen(),
           ),
@@ -146,7 +167,9 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const RegisterScreen(),
           ),
@@ -157,16 +180,23 @@ void main() {
       await tester.tap(find.text('إنشاء الحساب'));
       await tester.pumpAndSettle();
 
-      expect(find.text('كلمة المرور يجب أن تكون 6 أحرف على الأقل'), findsOneWidget);
+      expect(
+        find.text('كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('should show/hide password when toggle clicked', (WidgetTester tester) async {
+    testWidgets('should show/hide password when toggle clicked', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (context) => AuthProvider(context.read<CartProvider>())),
+              ChangeNotifierProvider(
+                create: (context) => AuthProvider(context.read<CartProvider>()),
+              ),
             ],
             child: const RegisterScreen(),
           ),

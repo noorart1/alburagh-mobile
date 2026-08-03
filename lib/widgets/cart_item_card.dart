@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../core/theme/app_spacing.dart';
@@ -24,7 +25,6 @@ class CartItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final product = item.product;
-    final price = double.tryParse(product.price) ?? 0;
     final image = product.imageUrl;
 
     return Card(
@@ -77,7 +77,10 @@ class CartItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '\$${price.toStringAsFixed(2)}',
+                    CurrencyUtils.formatString(
+                      product.price,
+                      product.currencySymbol,
+                    ),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppColors.primary,
