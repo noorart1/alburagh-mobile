@@ -3,12 +3,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
-import '../core/constants.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_radius.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/product_card.dart';
 import 'category_screen.dart';
+import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,7 +21,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _api = ApiService();
-  List<Product> products = [];
+  List<Product> featuredProducts = [];
+  List<Product> newArrivals = [];
   List<Category> categories = [];
   bool isLoading = true;
   int _currentBannerIndex = 0;
@@ -38,17 +41,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> loadData() async {
     try {
-      final prodData = await _api.getProducts();
+      final featuredData = await _api.getFeaturedProducts();
+      final newArrivalsData = await _api.getNewArrivals();
       final catData = await _api.getCategories();
 
       if (!mounted) return;
       setState(() {
-        products = prodData.map((p) => Product.fromJson(p)).toList();
+        featuredProducts = featuredData
+            .map((p) => Product.fromJson(p))
+            .toList();
+        newArrivals = newArrivalsData.map((p) => Product.fromJson(p)).toList();
         categories = catData.map((c) => Category.fromJson(c)).toList();
         isLoading = false;
       });
-      // Load cart data after loading products and categories. Do not let a
-      // cart failure block the already-loaded home content.
+      // Load cart data after loading products. Do not let a cart failure
+      // block the already-loaded home content.
       try {
         await context.read<CartProvider>().loadCart();
       } catch (_) {
@@ -63,193 +70,345 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('دار البراق'),
-        backgroundColor: primaryColor,
-        actions: [
-          IconButton(
-            icon: Badge(
-              label: Text('${context.watch<CartProvider>().itemCount}'),
-              child: const Icon(Icons.shopping_cart),
-            ),
-            onPressed: () => Navigator.pushNamed(context, '/cart'),
-          ),
-        ],
-      ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: loadData,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 12),
-                    CarouselSlider.builder(
-                      itemCount: _bannerImageUrls.length,
-                      options: CarouselOptions(
-                        height: 190,
-                        autoPlay: true,
-                        autoPlayInterval: const Duration(seconds: 4),
-                        enlargeCenterPage: true,
-                        viewportFraction: 0.92,
-                        onPageChanged: (index, reason) {
-                          setState(() => _currentBannerIndex = index);
-                        },
+      body: SafeArea(
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: loadData,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'AlBuragh',
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  color: AppColors.textPrimary,
+                                ),
+                                onPressed: loadData,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      itemBuilder: (context, index, realIndex) {
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: _bannerImageUrls[index],
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: CircularProgressIndicator(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SearchScreen(),
+                            ),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceSoft,
+                              borderRadius: AppRadius.lgRadius,
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.search, color: AppColors.textMuted),
+                                SizedBox(width: 8),
+                                Text(
+                                  'ابحث عن المنتجات والفئات...',
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      CarouselSlider.builder(
+                        itemCount: _bannerImageUrls.length,
+                        options: CarouselOptions(
+                          height: 190,
+                          autoPlay: true,
+                          autoPlayInterval: const Duration(seconds: 4),
+                          enlargeCenterPage: true,
+                          viewportFraction: 0.92,
+                          onPageChanged: (index, reason) {
+                            setState(() => _currentBannerIndex = index);
+                          },
+                        ),
+                        itemBuilder: (context, index, realIndex) {
+                          return ClipRRect(
+                            borderRadius: AppRadius.mdRadius,
+                            child: CachedNetworkImage(
+                              imageUrl: _bannerImageUrls[index],
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: AppColors.surfaceSoft,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: AppColors.surfaceSoft,
+                                child: const Icon(
+                                  Icons.image_not_supported,
+                                  color: AppColors.textMuted,
+                                ),
                               ),
                             ),
-                            errorWidget: (context, url, error) => Container(
-                              color: Colors.grey.shade200,
-                              child: Icon(
-                                Icons.image_not_supported,
-                                color: Colors.grey.shade600,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          _bannerImageUrls.length,
+                          (index) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            width: _currentBannerIndex == index ? 18 : 7,
+                            height: 7,
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            decoration: BoxDecoration(
+                              color: _currentBannerIndex == index
+                                  ? AppColors.primary
+                                  : AppColors.border,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
+                        child: Text(
+                          'الأقسام',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 146,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final cat = categories[index];
+                            return Padding(
+                              padding: const EdgeInsets.all(6.0),
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          CategoryScreen(category: cat),
+                                    ),
+                                  );
+                                },
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color:
+                                              AppColors.categoryAccents[index %
+                                                  AppColors
+                                                      .categoryAccents
+                                                      .length],
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: CircleAvatar(
+                                        radius: 30,
+                                        backgroundColor: AppColors.surfaceSoft,
+                                        backgroundImage: cat.imageUrl.isNotEmpty
+                                            ? NetworkImage(cat.imageUrl)
+                                            : null,
+                                        child: cat.imageUrl.isEmpty
+                                            ? Icon(
+                                                Icons.category,
+                                                color:
+                                                    AppColors
+                                                        .categoryAccents[index %
+                                                        AppColors
+                                                            .categoryAccents
+                                                            .length],
+                                                size: 25,
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    SizedBox(
+                                      width: 75,
+                                      child: Text(
+                                        cat.name,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${cat.count} منتج',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: AppColors.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      _buildSection(
+                        title: 'Featured Products',
+                        products: featuredProducts,
+                      ),
+                      _buildSection(
+                        title: 'New Arrivals',
+                        products: newArrivals,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required List<Product> products,
+  }) {
+    if (products.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+          child: Text(
+            title,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 290,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: products.length + 1,
+            itemBuilder: (context, index) {
+              if (index == products.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: SizedBox(
+                    width: 110,
+                    child: _MoreCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CategoryScreen(
+                              category: Category(
+                                id: 0,
+                                name: 'كل الكتب',
+                                imageUrl: '',
+                                slug: 'all-books',
                               ),
                             ),
                           ),
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        _bannerImageUrls.length,
-                        (index) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          width: _currentBannerIndex == index ? 18 : 7,
-                          height: 7,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: _currentBannerIndex == index
-                                ? primaryColor
-                                : Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'الأقسام',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 130,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: categories.length,
-                        itemBuilder: (context, index) {
-                          final cat = categories[index];
-                          return Padding(
-                            padding: const EdgeInsets.all(6.0),
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        CategoryScreen(category: cat),
-                                  ),
-                                );
-                              },
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.1),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 30,
-                                      backgroundColor: Colors.grey[200],
-                                      backgroundImage: cat.imageUrl.isNotEmpty
-                                          ? NetworkImage(cat.imageUrl)
-                                          : null,
-                                      child: cat.imageUrl.isEmpty
-                                          ? Icon(
-                                              Icons.category,
-                                              color: Colors.grey[600],
-                                              size: 25,
-                                            )
-                                          : null,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  SizedBox(
-                                    width: 75,
-                                    child: Text(
-                                      cat.name,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'المنتجات',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        return ProductCard(product: products[index]);
-                      },
-                    ),
-                  ],
+                  ),
+                );
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: SizedBox(
+                  width: 160,
+                  child: ProductCard(product: products[index]),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MoreCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _MoreCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: AppColors.surfaceSoft,
+                child: Icon(Icons.arrow_back, color: AppColors.primary),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'المزيد',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

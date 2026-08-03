@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
+import '../core/theme/app_colors.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
 import 'register_screen.dart';
+import 'wishlist_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -103,27 +105,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _lastNameController.text = lastName;
           _phoneController.text =
               profile['phone']?.toString() ??
-              billing['phone']?.toString() ?? '';
+              billing['phone']?.toString() ??
+              '';
           _emailController.text =
               profile['email']?.toString() ?? authProvider.user!.email;
           _address1Controller.text =
               billing['address_1']?.toString() ??
-              shipping['address_1']?.toString() ?? '';
+              shipping['address_1']?.toString() ??
+              '';
           _address2Controller.text =
               billing['address_2']?.toString() ??
-              shipping['address_2']?.toString() ?? '';
+              shipping['address_2']?.toString() ??
+              '';
           _cityController.text =
-              billing['city']?.toString() ??
-              shipping['city']?.toString() ?? '';
+              billing['city']?.toString() ?? shipping['city']?.toString() ?? '';
           _stateController.text =
               billing['state']?.toString() ??
-              shipping['state']?.toString() ?? '';
+              shipping['state']?.toString() ??
+              '';
           _postcodeController.text =
               billing['postcode']?.toString() ??
-              shipping['postcode']?.toString() ?? '';
+              shipping['postcode']?.toString() ??
+              '';
           _countryController.text =
               billing['country']?.toString() ??
-              shipping['country']?.toString() ?? '';
+              shipping['country']?.toString() ??
+              '';
           _isLoading = false;
         });
         return;
@@ -205,7 +212,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('تسجيل الخروج'),
-        content: const Text('هل تريد حذف معلومات الحساب المحفوظة من هذا الجهاز؟'),
+        content: const Text(
+          'هل تريد حذف معلومات الحساب المحفوظة من هذا الجهاز؟',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -223,9 +232,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     for (final key in [
-      _firstNameKey, _lastNameKey, _phoneKey, _emailKey,
-      _address1Key, _address2Key, _cityKey, _stateKey,
-      _postcodeKey, _countryKey,
+      _firstNameKey,
+      _lastNameKey,
+      _phoneKey,
+      _emailKey,
+      _address1Key,
+      _address2Key,
+      _cityKey,
+      _stateKey,
+      _postcodeKey,
+      _countryKey,
     ]) {
       await prefs.remove(key);
     }
@@ -260,9 +276,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text('هذا القسم جاهز للربط بخدمة الحساب والطلبات.'),
@@ -521,7 +537,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final token = context.read<AuthProvider>().user?.token;
                   if (token == null || token.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+                      const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
+                    );
                     return;
                   }
                   final orders = await _api.getOrders(token);
@@ -533,9 +550,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('طلباتي',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                          const Text(
+                            'طلباتي',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           if (orders.isEmpty)
                             const Text('لا توجد طلبات بعد.')
@@ -549,8 +570,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       orders[index] as Map<String, dynamic>;
                                   return ListTile(
                                     title: Text('الطلب #${order['id']}'),
-                                    subtitle:
-                                        Text('الحالة: ${order['status']}'),
+                                    subtitle: Text(
+                                      'الحالة: ${order['status']}',
+                                    ),
                                     trailing: Text('${order['total']}'),
                                   );
                                 },
@@ -570,14 +592,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final token = context.read<AuthProvider>().user?.token;
                   if (token == null || token.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+                      const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
+                    );
                     return;
                   }
                   try {
                     final addresses = await _api.getAddresses(token);
                     if (!mounted) return;
-                    final primary =
-                        addresses.isNotEmpty ? addresses.first : null;
+                    final primary = addresses.isNotEmpty
+                        ? addresses.first
+                        : null;
                     if (primary != null) {
                       setState(() {
                         _firstNameController.text = primary.firstName;
@@ -591,15 +615,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _countryController.text = primary.country;
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('تم تحميل العنوان')));
+                        const SnackBar(content: Text('تم تحميل العنوان')),
+                      );
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('لا يوجد عنوان محفوظ')));
+                        const SnackBar(content: Text('لا يوجد عنوان محفوظ')),
+                      );
                     }
                   } catch (_) {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('فشل تحميل العناوين')));
+                      const SnackBar(content: Text('فشل تحميل العناوين')),
+                    );
                   }
                 },
               ),
@@ -607,7 +634,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: Icons.favorite_border,
                 title: 'المفضلة',
                 subtitle: 'المنتجات التي أعجبتك',
-                onTap: () => _showComingSoon('المفضلة'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const WishlistScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -679,7 +713,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 12),
-                  Text(error!, style: const TextStyle(color: Colors.red)),
+                  Text(error!, style: const TextStyle(color: AppColors.error)),
                 ],
               ],
             ),
@@ -718,7 +752,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           error = e.response?.statusCode == 404
                               ? 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني'
                               : (e.response?.data?['message'] as String? ??
-                                  'تعذر إرسال طلب الاستعادة');
+                                    'تعذر إرسال طلب الاستعادة');
                         });
                       } catch (_) {
                         setDialogState(() {
@@ -743,10 +777,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildLoginScreen(AuthProvider authProvider) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('حسابي'),
-        backgroundColor: primaryColor,
-      ),
+      appBar: AppBar(title: const Text('حسابي'), backgroundColor: primaryColor),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -791,23 +822,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade100,
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade300),
+                        border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, color: Colors.red.shade600),
+                          const Icon(
+                            Icons.error_outline,
+                            color: AppColors.error,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               authProvider.error!,
-                              style: TextStyle(
-                                  color: Colors.red.shade600, fontSize: 14),
+                              style: const TextStyle(
+                                color: AppColors.error,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                           IconButton(
-                            icon: Icon(Icons.close, color: Colors.red.shade600),
+                            icon: const Icon(
+                              Icons.close,
+                              color: AppColors.error,
+                            ),
                             onPressed: authProvider.clearError,
                           ),
                         ],
@@ -821,9 +862,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       hintText: 'البريد الإلكتروني',
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                     ),
                     keyboardType: TextInputType.emailAddress,
                   ),
@@ -841,13 +885,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                     ),
                   ),
                   Align(
@@ -879,7 +927,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       backgroundColor: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: authProvider.isLoading
                         ? const SizedBox(
@@ -887,8 +936,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text(
@@ -904,20 +954,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Wrap(
                     alignment: WrapAlignment.center,
                     children: [
-                      Text('ليس لديك حساب؟ ',
-                          style: TextStyle(color: Colors.grey[600])),
+                      const Text(
+                        'ليس لديك حساب؟ ',
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => const RegisterScreen()),
+                              builder: (context) => const RegisterScreen(),
+                            ),
                           );
                         },
                         child: Text(
                           'أنشئ حساباً',
                           style: TextStyle(
-                              color: primaryColor, fontWeight: FontWeight.bold),
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -1017,11 +1072,11 @@ class _CartSummary extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const CircleAvatar(
-            backgroundColor: Color(0xFFE8F5E9),
+            backgroundColor: AppColors.surfaceSoft,
             child: Icon(Icons.shopping_cart_outlined, color: primaryColor),
           ),
           title: Text('$itemCount منتج في السلة'),
-      subtitle: Text('المجموع: $totalPrice دولار'),
+          subtitle: Text('المجموع: $totalPrice دولار'),
           trailing: const Icon(Icons.chevron_left),
           onTap: onOpenCart,
         ),
@@ -1078,7 +1133,7 @@ class _ProfileSection extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: AppColors.border),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1087,9 +1142,9 @@ class _ProfileSection extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               ...children,
@@ -1121,7 +1176,7 @@ class _ProfileTile extends StatelessWidget {
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFFE8F5E9),
+          backgroundColor: AppColors.surfaceSoft,
           child: Icon(icon, color: primaryColor),
         ),
         title: Text(title),

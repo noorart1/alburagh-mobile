@@ -13,11 +13,7 @@ class CartItem {
     required this.quantity,
   });
 
-  CartItem copyWith({
-    String? key,
-    Product? product,
-    int? quantity,
-  }) {
+  CartItem copyWith({String? key, Product? product, int? quantity}) {
     return CartItem(
       key: key ?? this.key,
       product: product ?? this.product,
@@ -38,8 +34,7 @@ class CartProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  int get itemCount =>
-      _items.fold<int>(0, (sum, item) => sum + item.quantity);
+  int get itemCount => _items.fold<int>(0, (sum, item) => sum + item.quantity);
 
   double get subtotalPrice {
     return _items.fold<double>(
@@ -148,10 +143,7 @@ class CartProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      await _apiService.updateCart(
-        cartItemKey: cartItem.key,
-        quantity: 0,
-      );
+      await _apiService.updateCart(cartItemKey: cartItem.key, quantity: 0);
       await loadCart();
       return true;
     } catch (e) {

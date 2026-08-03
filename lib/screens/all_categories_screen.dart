@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/api_service.dart';
-import '../core/constants.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_radius.dart';
 import '../models/category.dart';
 import 'category_screen.dart';
 
@@ -37,9 +38,9 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
       if (!mounted) return;
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')));
       }
     }
   }
@@ -51,11 +52,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('الأقسام'),
-        backgroundColor: primaryColor,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('الأقسام')),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -66,16 +63,9 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                     onChanged: (value) {
                       setState(() => searchQuery = value);
                     },
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: 'ابحث في الأقسام...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                      prefixIcon: Icon(Icons.search),
                     ),
                   ),
                 ),
@@ -85,18 +75,18 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.category_outlined,
                                 size: 48,
-                                color: Colors.grey[400],
+                                color: AppColors.textMuted,
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 searchQuery.isEmpty
                                     ? 'لم يتم العثور على أقسام'
                                     : 'لم يتم العثور على نتائج للبحث',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
                                   fontSize: 16,
                                 ),
                               ),
@@ -109,15 +99,15 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                             padding: const EdgeInsets.all(12),
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 0.9,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                            ),
+                                  crossAxisCount: 2,
+                                  childAspectRatio: 0.78,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                ),
                             itemCount: filteredCategories.length,
                             itemBuilder: (context, index) {
                               final cat = filteredCategories[index];
-                              return _buildCategoryCard(context, cat);
+                              return _buildCategoryCard(context, cat, index);
                             },
                           ),
                         ),
@@ -127,7 +117,14 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
     );
   }
 
-  Widget _buildCategoryCard(BuildContext context, Category category) {
+  Widget _buildCategoryCard(
+    BuildContext context,
+    Category category,
+    int index,
+  ) {
+    final accent =
+        AppColors.categoryAccents[index % AppColors.categoryAccents.length];
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -138,19 +135,10 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         );
       },
       child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                primaryColor.withValues(alpha: 0.1),
-                accentColor.withValues(alpha: 0.1),
-              ],
-            ),
+            borderRadius: AppRadius.lgRadius,
+            color: accent.withValues(alpha: 0.08),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -158,7 +146,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
               if (category.imageUrl.isNotEmpty)
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
+                    top: Radius.circular(24),
                   ),
                   child: Image.network(
                     category.imageUrl,
@@ -168,12 +156,8 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
                         height: 100,
-                        color: Colors.grey[200],
-                        child: Icon(
-                          Icons.category,
-                          color: Colors.grey[600],
-                          size: 40,
-                        ),
+                        color: AppColors.surfaceSoft,
+                        child: Icon(Icons.category, color: accent, size: 40),
                       );
                     },
                   ),
@@ -181,15 +165,11 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
               else
                 Container(
                   height: 80,
-                  color: Colors.grey[200],
-                  child: Icon(
-                    Icons.category,
-                    color: Colors.grey[600],
-                    size: 40,
-                  ),
+                  color: AppColors.surfaceSoft,
+                  child: Icon(Icons.category, color: accent, size: 40),
                 ),
               Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                 child: Text(
                   category.name,
                   textAlign: TextAlign.center,
@@ -198,6 +178,17 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  '${category.count} منتج',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
                   ),
                 ),
               ),

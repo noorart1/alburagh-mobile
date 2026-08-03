@@ -81,16 +81,20 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      final responseEmail = authData['user_email']?.toString() ??
+      final responseEmail =
+          authData['user_email']?.toString() ??
           alburaghUser?['email']?.toString() ??
           identifier;
-      final displayName = authData['user_display_name']?.toString() ??
+      final displayName =
+          authData['user_display_name']?.toString() ??
           [alburaghUser?['first_name'], alburaghUser?['last_name']]
               .whereType<String>()
               .where((value) => value.isNotEmpty)
               .join(' ')
               .trim();
-      final name = displayName.isNotEmpty ? displayName : identifier.split('@')[0];
+      final name = displayName.isNotEmpty
+          ? displayName
+          : identifier.split('@')[0];
       final userEmail = responseEmail.isNotEmpty ? responseEmail : identifier;
 
       _user = User(id: userId, email: userEmail, name: name, token: token);

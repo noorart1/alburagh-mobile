@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
+import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/cart_item_card.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -17,7 +18,7 @@ class _CartScreenState extends State<CartScreen> {
   final ApiService _api = ApiService();
 
   static final Uri _originalCartUri = Uri.parse(
-    'https://alburagh.com/%d8%b3%d9%84%d8%a9-%d8%a7%d9%84%d9%85%d8%b4%d8%aa%d8%b1%d9%8a%d8%a7%d8%aa/',
+    'https://alburagh.com/shopping-cart/',
   );
 
   bool _checkoutLoading = false;
@@ -54,9 +55,9 @@ class _CartScreenState extends State<CartScreen> {
     if (confirmed == true) {
       await cart.clearCart();
       if (!mounted || cart.error != null) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تفريغ السلة')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تم تفريغ السلة')));
     }
   }
 
@@ -89,9 +90,9 @@ class _CartScreenState extends State<CartScreen> {
       if (await canLaunchUrl(targetUri)) {
         await launchUrl(targetUri, mode: LaunchMode.externalApplication);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر فتح صفحة السلة')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تعذر فتح صفحة السلة')));
       }
     } finally {
       if (mounted) setState(() => _checkoutLoading = false);
@@ -115,7 +116,9 @@ class _CartScreenState extends State<CartScreen> {
             IconButton(
               tooltip: 'تفريغ السلة',
               icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: cart.isLoading ? null : () => _showClearConfirmation(cart),
+              onPressed: cart.isLoading
+                  ? null
+                  : () => _showClearConfirmation(cart),
             ),
         ],
       ),
@@ -143,6 +146,7 @@ class _CartScreenState extends State<CartScreen> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
                           ),
                         ),
                       ],
@@ -178,7 +182,7 @@ class _CartScreenState extends State<CartScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const Icon(Icons.error_outline, size: 48, color: AppColors.error),
               const SizedBox(height: 12),
               Text(cart.error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
@@ -200,7 +204,11 @@ class _CartScreenState extends State<CartScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(height: 180),
-            Icon(Icons.shopping_cart_outlined, size: 72, color: Colors.grey),
+            Icon(
+              Icons.shopping_cart_outlined,
+              size: 72,
+              color: AppColors.textMuted,
+            ),
             SizedBox(height: 16),
             Center(child: Text('سلة المشتريات فارغة')),
           ],
@@ -214,7 +222,7 @@ class _CartScreenState extends State<CartScreen> {
         padding: const EdgeInsets.all(12),
         itemCount: cart.items.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (context, index) => _CartItemTile(
+        itemBuilder: (context, index) => CartItemCard(
           item: cart.items[index],
           enabled: !cart.isLoading,
           onIncrease: () => cart.updateQuantity(
@@ -226,102 +234,6 @@ class _CartScreenState extends State<CartScreen> {
             cart.items[index].quantity - 1,
           ),
           onRemove: () => cart.removeFromCart(cart.items[index].product),
-        ),
-      ),
-    );
-  }
-}
-
-class _CartItemTile extends StatelessWidget {
-  final CartItem item;
-  final bool enabled;
-  final VoidCallback onIncrease;
-  final VoidCallback onDecrease;
-  final VoidCallback onRemove;
-
-  const _CartItemTile({
-    required this.item,
-    required this.enabled,
-    required this.onIncrease,
-    required this.onDecrease,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final product = item.product;
-    final price = double.tryParse(product.price) ?? 0;
-    final image = product.imageUrl;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: image.isEmpty
-                  ? Container(
-                      width: 72,
-                      height: 88,
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.book_outlined, size: 32),
-                    )
-                  : CachedNetworkImage(
-                      imageUrl: image,
-                      width: 72,
-                      height: 88,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, _, _) => Container(
-                        color: Colors.grey.shade200,
-                        child: const Icon(Icons.book_outlined, size: 32),
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('${price.toStringAsFixed(2)} دولار'),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        onPressed: enabled && item.quantity > 1
-                            ? onDecrease
-                            : null,
-                        icon: const Icon(Icons.remove_circle_outline),
-                      ),
-                      Text(
-                        '${item.quantity}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        onPressed: enabled ? onIncrease : null,
-                        icon: const Icon(Icons.add_circle_outline),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'إزالة',
-              onPressed: enabled ? onRemove : null,
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-            ),
-          ],
         ),
       ),
     );

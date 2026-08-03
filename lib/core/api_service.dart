@@ -88,10 +88,7 @@ class ApiService {
     if (category != null && category.isNotEmpty) {
       queryParams['category'] = int.tryParse(category) ?? category;
     }
-    final response = await _dio.get(
-      'products',
-      queryParameters: queryParams,
-    );
+    final response = await _dio.get('products', queryParameters: queryParams);
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
@@ -144,10 +141,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> forgotPassword(String email) async {
-    final response = await _dio.post(
-      'forgot-password',
-      data: {'email': email},
-    );
+    final response = await _dio.post('forgot-password', data: {'email': email});
     return response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};
@@ -231,10 +225,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getCart() async {
     try {
-      final response = await _dio.get(
-        'cart',
-        options: await _authOptions(),
-      );
+      final response = await _dio.get('cart', options: await _authOptions());
       return response.data is Map
           ? Map<String, dynamic>.from(response.data)
           : <String, dynamic>{};
@@ -278,8 +269,46 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> clearCart() async {
+    final response = await _dio.delete('cart', options: await _authOptions());
+    return response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> getWishlist() async {
+    try {
+      final response = await _dio.get(
+        'wishlist',
+        options: await _authOptions(),
+      );
+      return response.data is Map
+          ? Map<String, dynamic>.from(response.data)
+          : <String, dynamic>{};
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 500) {
+        return {'items': <dynamic>[]};
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> addToWishlist({required int productId}) async {
+    final response = await _dio.post(
+      'wishlist',
+      data: {'product_id': productId},
+      options: await _authOptions(),
+    );
+    return response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> removeFromWishlist({
+    required int productId,
+  }) async {
     final response = await _dio.delete(
-      'cart',
+      'wishlist',
+      data: {'product_id': productId},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -288,7 +317,10 @@ class ApiService {
   }
 
   Future<List<dynamic>> getReviews({required int productId}) async {
-    final response = await _dio.get('reviews', queryParameters: {'product_id': productId});
+    final response = await _dio.get(
+      'reviews',
+      queryParameters: {'product_id': productId},
+    );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
@@ -348,7 +380,10 @@ class ApiService {
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
-  Future<Map<String, dynamic>> getOrderDetails(String token, int orderId) async {
+  Future<Map<String, dynamic>> getOrderDetails(
+    String token,
+    int orderId,
+  ) async {
     final response = await _dio.get(
       'orders/$orderId',
       options: Options(headers: {'Authorization': 'Bearer $token'}),

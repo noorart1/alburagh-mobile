@@ -43,6 +43,7 @@ dependencies:
   shared_preferences: ^2.5.5
   url_launcher: ^6.2.0
   country_picker: ^2.0.28
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:

@@ -4,11 +4,11 @@ class StringUtils {
   /// Remove HTML tags from a string and decode HTML entities
   static String stripHtmlTags(String htmlString) {
     if (htmlString.isEmpty) return '';
-    
+
     try {
       final document = html_parser.parse(htmlString);
       final parsedString = document.body?.text ?? '';
-      
+
       // Decode common HTML entities
       return _decodeHtmlEntities(parsedString).trim();
     } catch (e) {

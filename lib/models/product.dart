@@ -11,6 +11,9 @@ class Product {
   final String type;
   final String externalUrl;
   final String buttonText;
+  final String category;
+  final double averageRating;
+  final bool inStock;
 
   Product({
     required this.id,
@@ -23,18 +26,30 @@ class Product {
     required this.type,
     required this.externalUrl,
     required this.buttonText,
+    this.category = '',
+    this.averageRating = 0.0,
+    this.inStock = true,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
     final images = json['images'] is List
         ? (json['images'] as List)
-            .map((image) => image is Map ? image['src']?.toString() ?? '' : '')
-            .where((src) => src.isNotEmpty)
-            .toList()
+              .map(
+                (image) => image is Map ? image['src']?.toString() ?? '' : '',
+              )
+              .where((src) => src.isNotEmpty)
+              .toList()
         : <String>[];
 
     final description = (json['short_description'] ?? json['description'] ?? '')
         .toString();
+
+    final categories = json['categories'] is List
+        ? (json['categories'] as List)
+              .map((c) => c is Map ? c['name']?.toString() ?? '' : '')
+              .where((name) => name.isNotEmpty)
+              .toList()
+        : <String>[];
 
     return Product(
       id: json['id'] is int
@@ -49,6 +64,10 @@ class Product {
       type: json['type']?.toString() ?? '',
       externalUrl: json['external_url']?.toString() ?? '',
       buttonText: json['button_text']?.toString() ?? '',
+      category: categories.isNotEmpty ? categories.first : '',
+      averageRating:
+          double.tryParse(json['average_rating']?.toString() ?? '') ?? 0.0,
+      inStock: json['stock_status']?.toString() != 'outofstock',
     );
   }
 }

@@ -51,10 +51,13 @@ class CountryPickerField extends StatelessWidget {
                     )
                   : const Icon(Icons.flag_outlined),
               suffixIcon: const Icon(Icons.arrow_drop_down),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: Text(
-              country?.name ?? (value.text.isEmpty ? 'اختر الدولة' : value.text),
+              country?.name ??
+                  (value.text.isEmpty ? 'اختر الدولة' : value.text),
               overflow: TextOverflow.ellipsis,
             ),
           ),

@@ -469,7 +469,23 @@ return new WP_Error('wc_missing', 'WooCommerce is not active.', array('status' =
 
 $page = $request->get_param('page') ? intval($request->get_param('page')) : 1;
 $per_page = $request->get_param('per_page') ? intval($request->get_param('per_page')) : 10;
-$category = $request->get_param('category') ? intval($request->get_param('category')) : null;
+
+// Accepts either a numeric term_id or a slug (e.g. the app's "all-books"
+// shortcut) — previously this only handled numeric IDs via intval(), so a
+// slug silently fell back to 0/no filter and every category-filtered
+// request quietly returned the unfiltered catalog instead.
+$category_param = $request->get_param('category');
+$category_field = 'term_id';
+$category_value = null;
+
+if ($category_param !== null && $category_param !== '') {
+if (is_numeric($category_param)) {
+$category_value = intval($category_param);
+} else {
+$category_field = 'slug';
+$category_value = sanitize_title($category_param);
+}
+}
 
 $args = array(
 'post_type'      => 'product',
@@ -478,12 +494,12 @@ $args = array(
 'post_status'    => 'publish'
 );
 
-if ($category) {
+if ($category_value) {
 $args['tax_query'] = array(
 array(
 'taxonomy' => 'product_cat',
-'field'    => 'term_id',
-'terms'    => $category,
+'field'    => $category_field,
+'terms'    => $category_value,
 ),
 );
 }
@@ -755,6 +771,14 @@ $images[] = array('id' => intval($id), 'src' => $src, 'alt' => $product->get_nam
 }
 }
 
+$categories = array();
+foreach ($product->get_category_ids() as $cat_id) {
+$term = get_term($cat_id, 'product_cat');
+if ($term && !is_wp_error($term)) {
+$categories[] = array('id' => $term->term_id, 'name' => $term->name, 'slug' => $term->slug);
+}
+}
+
 return array(
 'id' => $product->get_id(),
 'name' => $product->get_name(),
@@ -768,6 +792,7 @@ return array(
 'stock_status' => $product->get_stock_status(),
 'stock_quantity' => $product->get_stock_quantity(),
 'images' => $images,
+'categories' => $categories,
 'average_rating' => floatval($product->get_average_rating()),
 'rating_count' => intval($product->get_rating_count()),
 'is_featured' => $product->is_featured(),
@@ -928,6 +953,179 @@ delete_user_meta($user_id, '_alburagh_mobile_cart');
 $response = $this->get_cart($request);
 $this->end_user_context($previous_user_id);
 return $response;
+}
+}
+
+// Reads/writes the same tables YITH WooCommerce Wishlist itself uses
+// (wp_yith_wcwl / wp_yith_wcwl_lists), so an item added from the app shows up
+// on the website's own /favorites/ page immediately, instead of living in a
+// separate app-only store. Requires a logged-in user — YITH's guest wishlists
+// are keyed off a token cookie the REST API has no access to, so guest
+// support is intentionally out of scope here (same tradeoff avoided by
+// requiring auth rather than trying to fake a guest session).
+class AlBuragh_API_Wishlist_Controller {
+private function get_user_id_from_request($request) {
+$auth_header = $request->get_header('Authorization');
+if (empty($auth_header)) {
+return 0;
+}
+$token = preg_replace('/^Bearer\s+/i', '', trim($auth_header));
+$user_id = AlBuragh_JWT_Auth::validate_token($token);
+return $user_id ? intval($user_id) : 0;
+}
+
+private function product_payload($product) {
+$image_ids = $product->get_gallery_image_ids();
+$images = array();
+$featured_src = wp_get_attachment_url($product->get_image_id());
+
+if ($featured_src) {
+$images[] = array('id' => 0, 'src' => $featured_src, 'alt' => $product->get_name());
+}
+
+foreach ($image_ids as $id) {
+$src = wp_get_attachment_url($id);
+if ($src) {
+$images[] = array('id' => intval($id), 'src' => $src, 'alt' => $product->get_name());
+}
+}
+
+$categories = array();
+foreach ($product->get_category_ids() as $cat_id) {
+$term = get_term($cat_id, 'product_cat');
+if ($term && !is_wp_error($term)) {
+$categories[] = array('id' => $term->term_id, 'name' => $term->name, 'slug' => $term->slug);
+}
+}
+
+return array(
+'id' => $product->get_id(),
+'name' => $product->get_name(),
+'sku' => $product->get_sku(),
+'description' => $product->get_description(),
+'short_description' => $product->get_short_description(),
+'price' => floatval($product->get_price()),
+'regular_price' => floatval($product->get_regular_price()),
+'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
+'on_sale' => $product->is_on_sale(),
+'stock_status' => $product->get_stock_status(),
+'stock_quantity' => $product->get_stock_quantity(),
+'images' => $images,
+'categories' => $categories,
+'average_rating' => floatval($product->get_average_rating()),
+'rating_count' => intval($product->get_rating_count()),
+'is_featured' => $product->is_featured(),
+);
+}
+
+// Finds this user's default YITH wishlist row, creating one if they've
+// never used the website's wishlist feature yet.
+private function get_or_create_wishlist_id($user_id) {
+global $wpdb;
+$lists_table = $wpdb->prefix . 'yith_wcwl_lists';
+
+$wishlist_id = $wpdb->get_var($wpdb->prepare(
+"SELECT ID FROM {$lists_table} WHERE user_id = %d AND is_default = 1 LIMIT 1",
+$user_id
+));
+
+if ($wishlist_id) {
+return intval($wishlist_id);
+}
+
+$wpdb->insert($lists_table, array(
+'user_id' => $user_id,
+'session_id' => '',
+'wishlist_name' => 'Wishlist',
+'wishlist_slug' => 'wishlist-' . $user_id,
+'wishlist_token' => wp_generate_password(12, false),
+'is_default' => 1,
+'dateadded' => current_time('mysql'),
+'dateupdated' => current_time('mysql'),
+));
+
+return intval($wpdb->insert_id);
+}
+
+public function get_wishlist($request) {
+global $wpdb;
+$user_id = $this->get_user_id_from_request($request);
+
+if (!$user_id) {
+return new WP_REST_Response(array('items' => array()), 200);
+}
+
+$wishlist_id = $this->get_or_create_wishlist_id($user_id);
+$items_table = $wpdb->prefix . 'yith_wcwl';
+
+$rows = $wpdb->get_results($wpdb->prepare(
+"SELECT prod_id FROM {$items_table} WHERE wishlist_id = %d ORDER BY dateadded DESC",
+$wishlist_id
+));
+
+$items = array();
+foreach ($rows as $row) {
+$product = wc_get_product($row->prod_id);
+if ($product) {
+$items[] = array('product' => $this->product_payload($product));
+}
+}
+
+return new WP_REST_Response(array('items' => $items), 200);
+}
+
+public function add_to_wishlist($request) {
+global $wpdb;
+$params = $request->get_json_params();
+$product_id = isset($params['product_id']) ? intval($params['product_id']) : 0;
+
+if (!$product_id || !wc_get_product($product_id)) {
+return new WP_Error('invalid_product', 'Product not found.', array('status' => 400));
+}
+
+$user_id = $this->get_user_id_from_request($request);
+if (!$user_id) {
+return new WP_Error('unauthorized', 'Login required to use the wishlist.', array('status' => 401));
+}
+
+$wishlist_id = $this->get_or_create_wishlist_id($user_id);
+$items_table = $wpdb->prefix . 'yith_wcwl';
+
+$existing = $wpdb->get_var($wpdb->prepare(
+"SELECT ID FROM {$items_table} WHERE wishlist_id = %d AND prod_id = %d LIMIT 1",
+$wishlist_id, $product_id
+));
+
+if (!$existing) {
+$wpdb->insert($items_table, array(
+'prod_id' => $product_id,
+'wishlist_id' => $wishlist_id,
+'dateadded' => current_time('mysql'),
+));
+}
+
+return $this->get_wishlist($request);
+}
+
+public function remove_from_wishlist($request) {
+global $wpdb;
+$params = $request->get_json_params();
+$product_id = isset($params['product_id']) ? intval($params['product_id']) : 0;
+
+$user_id = $this->get_user_id_from_request($request);
+if (!$user_id) {
+return new WP_Error('unauthorized', 'Login required to use the wishlist.', array('status' => 401));
+}
+
+$wishlist_id = $this->get_or_create_wishlist_id($user_id);
+$items_table = $wpdb->prefix . 'yith_wcwl';
+
+$wpdb->delete($items_table, array(
+'wishlist_id' => $wishlist_id,
+'prod_id' => $product_id,
+));
+
+return $this->get_wishlist($request);
 }
 }
 
@@ -1194,6 +1392,7 @@ $auth = new AlBuragh_API_Auth_Controller();
 $prod = new AlBuragh_API_Product_Controller();
 $autologin = new AlBuragh_API_AutoLogin_Controller();
 $cart = new AlBuragh_API_Cart_Controller();
+$wishlist = new AlBuragh_API_Wishlist_Controller();
 $review = new AlBuragh_API_Review_Controller();
 $coupon = new AlBuragh_API_Coupon_Controller();
 $address = new AlBuragh_API_Address_Controller();
@@ -1292,6 +1491,25 @@ array(
 array(
 'methods' => 'DELETE',
 'callback' => array($cart, 'clear_cart'),
+'permission_callback' => '__return_true'
+)
+));
+
+// Wishlist (backed by YITH WooCommerce Wishlist's own tables)
+register_rest_route('alburagh/v1', '/wishlist', array(
+array(
+'methods' => 'GET',
+'callback' => array($wishlist, 'get_wishlist'),
+'permission_callback' => '__return_true'
+),
+array(
+'methods' => 'POST',
+'callback' => array($wishlist, 'add_to_wishlist'),
+'permission_callback' => '__return_true'
+),
+array(
+'methods' => 'DELETE',
+'callback' => array($wishlist, 'remove_from_wishlist'),
 'permission_callback' => '__return_true'
 )
 ));

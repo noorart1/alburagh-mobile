@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'core/theme/app_colors.dart';
+import 'core/theme/app_radius.dart';
 import 'providers/cart_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/wishlist_provider.dart';
 import 'screens/main_screen.dart';
 import 'screens/cart_screen.dart';
 
@@ -16,24 +20,20 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => CartProvider()),
-          ChangeNotifierProxyProvider<CartProvider, AuthProvider>(
-            create: (context) => AuthProvider(
-              Provider.of<CartProvider>(context, listen: false),
-            ),
-            update: (context, cartProvider, authProvider) =>
-                authProvider ?? AuthProvider(cartProvider),
-          ),
-        ],
-        child: MaterialApp(
-          title: 'دار البراق',
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => WishlistProvider()),
+        ChangeNotifierProxyProvider<CartProvider, AuthProvider>(
+          create: (context) =>
+              AuthProvider(Provider.of<CartProvider>(context, listen: false)),
+          update: (context, cartProvider, authProvider) =>
+              authProvider ?? AuthProvider(cartProvider),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'دار البراق',
         locale: const Locale('ar'),
-        supportedLocales: const [
-          Locale('ar'),
-          Locale('fa'),
-          Locale('en'),
-        ],
+        supportedLocales: const [Locale('ar'), Locale('fa'), Locale('en')],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -45,15 +45,93 @@ class MyApp extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           );
         },
-        theme: ThemeData(
-          primarySwatch: Colors.green,
-          fontFamily: 'Vazirmatn',
-        ),
+        theme: _buildTheme(),
         home: const MainScreen(),
-        routes: {
-          '/cart': (context) => const CartScreen(),
-        },
+        routes: {'/cart': (context) => const CartScreen()},
         debugShowCheckedModeBanner: false,
+      ),
+    );
+  }
+
+  ThemeData _buildTheme() {
+    final baseTextTheme = GoogleFonts.cairoTextTheme();
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      brightness: Brightness.light,
+      primary: AppColors.primary,
+      onPrimary: AppColors.white,
+      secondary: AppColors.accentOrange,
+      surface: AppColors.white,
+      onSurface: AppColors.textPrimary,
+      error: AppColors.error,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: AppColors.background,
+      textTheme: baseTextTheme.apply(
+        bodyColor: AppColors.textPrimary,
+        displayColor: AppColors.textPrimary,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: GoogleFonts.cairo(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          minimumSize: const Size(0, 44),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdRadius),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          minimumSize: const Size(0, 44),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdRadius),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 1.5,
+        surfaceTintColor: Colors.transparent,
+        color: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgRadius),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceSoft,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.mdRadius,
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.mdRadius,
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.mdRadius,
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textMuted,
+        backgroundColor: AppColors.white,
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }

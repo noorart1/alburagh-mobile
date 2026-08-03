@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../core/api_service.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_radius.dart';
 import '../models/product.dart';
-import '../models/review.dart';
 import '../providers/cart_provider.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -17,30 +17,7 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
-  final ApiService _api = ApiService();
   int _selectedImageIndex = 0;
-  List<Review> _reviews = [];
-  bool _isLoadingReviews = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadReviews();
-  }
-
-  Future<void> _loadReviews() async {
-    try {
-      final data = await _api.getReviews(productId: widget.product.id);
-      if (!mounted) return;
-      setState(() {
-        _reviews = data.map((r) => Review.fromJson(r as Map<String, dynamic>)).toList();
-        _isLoadingReviews = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isLoadingReviews = false);
-    }
-  }
 
   List<String> get _imageUrls {
     if (widget.product.imageUrls.isNotEmpty) {
@@ -59,10 +36,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final imageUrls = _imageUrls;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.product.name),
-        backgroundColor: Colors.green,
-      ),
+      appBar: AppBar(title: Text(widget.product.name)),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,97 +59,128 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '${widget.product.price} دولار',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '\$${widget.product.price}',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      if ((double.tryParse(widget.product.regularPrice) ?? 0) >
+                          (double.tryParse(widget.product.price) ?? 0)) ...[
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '\$${widget.product.regularPrice}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: AppColors.textMuted,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                  if (!widget.product.inStock) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'نفذ من المخزون',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   const Text(
                     'وصف المنتج:',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     widget.product.description.isNotEmpty
                         ? widget.product.description
                         : 'يتم تحديث الوصف الكامل لهذا المنتج.',
-                    style: const TextStyle(fontSize: 16, height: 1.6),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.6,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'المراجعات:',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  if (_isLoadingReviews)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_reviews.isEmpty)
-                    const Text('لا توجد مراجعات بعد.')
-                  else
-                    ..._reviews.map((review) => Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            title: Text(review.author),
-                            subtitle: Text(review.content),
-                            trailing: Text('${review.rating}/5'),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child:
+                        widget.product.type == 'external' &&
+                            widget.product.externalUrl.isNotEmpty
+                        ? ElevatedButton.icon(
+                            onPressed: () async {
+                              final uri = Uri.tryParse(
+                                widget.product.externalUrl,
+                              );
+                              if (uri != null && await canLaunchUrl(uri)) {
+                                await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.open_in_new),
+                            label: Text(
+                              widget.product.buttonText.isNotEmpty
+                                  ? widget.product.buttonText
+                                  : 'شراء',
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          )
+                        : ElevatedButton.icon(
+                            onPressed: !widget.product.inStock
+                                ? null
+                                : () async {
+                                    final cart = context.read<CartProvider>();
+                                    final success = await cart.addToCart(
+                                      widget.product,
+                                    );
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          success
+                                              ? 'تمت إضافة ${widget.product.name} إلى السلة'
+                                              : cart.error ??
+                                                    'فشل إضافة المنتج للسلة',
+                                        ),
+                                        backgroundColor: success
+                                            ? null
+                                            : AppColors.error,
+                                      ),
+                                    );
+                                  },
+                            icon: const Icon(Icons.add_shopping_cart),
+                            label: Text(
+                              widget.product.inStock
+                                  ? 'إضافة إلى السلة'
+                                  : 'نفذ من المخزون',
+                              style: const TextStyle(fontSize: 18),
+                            ),
                           ),
-                        )),
-                   const SizedBox(height: 32),
-                   SizedBox(
-                     width: double.infinity,
-                     height: 56,
-                     child: widget.product.type == 'external' && widget.product.externalUrl.isNotEmpty
-                         ? ElevatedButton.icon(
-                             onPressed: () async {
-                               final uri = Uri.tryParse(widget.product.externalUrl);
-                               if (uri != null && await canLaunchUrl(uri)) {
-                                 await launchUrl(uri, mode: LaunchMode.externalApplication);
-                               }
-                             },
-                             icon: const Icon(Icons.open_in_new),
-                             label: Text(
-                               widget.product.buttonText.isNotEmpty ? widget.product.buttonText : 'شراء',
-                               style: const TextStyle(fontSize: 18),
-                             ),
-                             style: ElevatedButton.styleFrom(
-                               backgroundColor: Colors.green,
-                               foregroundColor: Colors.white,
-                             ),
-                           )
-                         : ElevatedButton.icon(
-                             onPressed: () async {
-                               final cart = context.read<CartProvider>();
-                               final success = await cart.addToCart(widget.product);
-                               if (!context.mounted) return;
-                               ScaffoldMessenger.of(context).showSnackBar(
-                                 SnackBar(
-                                   content: Text(
-                                     success
-                                         ? 'تمت إضافة ${widget.product.name} إلى السلة'
-                                         : cart.error ?? 'فشل إضافة المنتج للسلة',
-                                   ),
-                                   backgroundColor: success ? Colors.green : Colors.red,
-                                 ),
-                               );
-                             },
-                             icon: const Icon(Icons.add_shopping_cart),
-                             label: const Text(
-                               'إضافة إلى السلة',
-                               style: TextStyle(fontSize: 18),
-                             ),
-                             style: ElevatedButton.styleFrom(
-                               backgroundColor: Colors.green,
-                               foregroundColor: Colors.white,
-                             ),
-                           ),
-                   ),
+                  ),
                 ],
               ),
             ),
@@ -205,11 +210,11 @@ class _ProductImageGallery extends StatelessWidget {
       return Container(
         width: double.infinity,
         height: 300,
-        color: Colors.grey.shade200,
-        child: Icon(
+        color: AppColors.surfaceSoft,
+        child: const Icon(
           Icons.image_not_supported,
           size: 88,
-          color: Colors.grey.shade600,
+          color: AppColors.textMuted,
         ),
       );
     }
@@ -225,16 +230,16 @@ class _ProductImageGallery extends StatelessWidget {
             fit: BoxFit.cover,
             placeholder: (context, url) => Container(
               height: 300,
-              color: Colors.grey.shade200,
+              color: AppColors.surfaceSoft,
               child: const Center(child: CircularProgressIndicator()),
             ),
             errorWidget: (context, url, error) => Container(
               height: 300,
-              color: Colors.grey.shade200,
-              child: Icon(
+              color: AppColors.surfaceSoft,
+              child: const Icon(
                 Icons.broken_image,
                 size: 88,
-                color: Colors.grey.shade600,
+                color: AppColors.textMuted,
               ),
             ),
           ),
@@ -253,16 +258,18 @@ class _ProductImageGallery extends StatelessWidget {
 
                 return InkWell(
                   onTap: () => onImageSelected(index),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadius.smRadius,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     width: 74,
                     height: 74,
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppRadius.smRadius,
                       border: Border.all(
-                        color: isSelected ? Colors.green : Colors.grey.shade300,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.border,
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -272,10 +279,10 @@ class _ProductImageGallery extends StatelessWidget {
                         imageUrl: imageUrls[index],
                         fit: BoxFit.cover,
                         placeholder: (context, url) =>
-                            Container(color: Colors.grey.shade200),
-                        errorWidget: (context, url, error) => Icon(
+                            Container(color: AppColors.surfaceSoft),
+                        errorWidget: (context, url, error) => const Icon(
                           Icons.broken_image,
-                          color: Colors.grey.shade500,
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ),

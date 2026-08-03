@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
-import '../core/constants.dart';
+import '../core/theme/app_colors.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
@@ -17,10 +17,16 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
+  static const int _perPage = 30;
+
   final ApiService _api = ApiService();
+  final ScrollController _scrollController = ScrollController();
   List<Product> products = [];
   List<Product> filteredProducts = [];
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMore = true;
+  int _page = 1;
   String sortBy = 'newest';
   String searchQuery = '';
 
@@ -28,6 +34,22 @@ class _CategoryScreenState extends State<CategoryScreen> {
   void initState() {
     super.initState();
     loadProducts();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!hasMore || isLoadingMore || isLoading) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      _loadMoreProducts();
+    }
   }
 
   Future<void> loadProducts() async {
@@ -35,11 +57,15 @@ class _CategoryScreenState extends State<CategoryScreen> {
       if (!mounted) return;
       setState(() => isLoading = true);
       final prodData = await _api.getProducts(
-        category: widget.category.id.toString(),
+        category: widget.category.slug ?? widget.category.id.toString(),
+        page: 1,
+        perPage: _perPage,
       );
       if (!mounted) return;
       setState(() {
         products = prodData.map((p) => Product.fromJson(p)).toList();
+        _page = 1;
+        hasMore = prodData.length == _perPage;
         _applyFiltersAndSort();
         isLoading = false;
       });
@@ -49,10 +75,33 @@ class _CategoryScreenState extends State<CategoryScreen> {
       if (!mounted) return;
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')));
       }
+    }
+  }
+
+  Future<void> _loadMoreProducts() async {
+    setState(() => isLoadingMore = true);
+    try {
+      final nextPage = _page + 1;
+      final prodData = await _api.getProducts(
+        category: widget.category.slug ?? widget.category.id.toString(),
+        page: nextPage,
+        perPage: _perPage,
+      );
+      if (!mounted) return;
+      setState(() {
+        products.addAll(prodData.map((p) => Product.fromJson(p)));
+        _page = nextPage;
+        hasMore = prodData.length == _perPage;
+        _applyFiltersAndSort();
+        isLoadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoadingMore = false);
     }
   }
 
@@ -82,15 +131,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.category.name),
-        backgroundColor: primaryColor,
-        elevation: 0,
         actions: [
           IconButton(
             icon: Badge(
               label: Text('${context.watch<CartProvider>().itemCount}'),
               child: const Icon(Icons.shopping_cart),
             ),
-            onPressed: () => Navigator.pushNamed(context, '/cart'),
+            onPressed: () =>
+                Navigator.of(context, rootNavigator: true).pushNamed('/cart'),
           ),
         ],
       ),
@@ -109,16 +157,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
                             _applyFiltersAndSort();
                           });
                         },
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: 'ابحث في المنتجات...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
+                          prefixIcon: Icon(Icons.search),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -149,18 +190,18 @@ class _CategoryScreenState extends State<CategoryScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.shopping_bag_outlined,
                                 size: 48,
-                                color: Colors.grey[400],
+                                color: AppColors.textMuted,
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 searchQuery.isEmpty
                                     ? 'لم يتم العثور على منتجات'
                                     : 'لم يتم العثور على نتائج للبحث',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
                                   fontSize: 16,
                                 ),
                               ),
@@ -169,21 +210,37 @@ class _CategoryScreenState extends State<CategoryScreen> {
                         )
                       : RefreshIndicator(
                           onRefresh: loadProducts,
-                          child: GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 0.75,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                            ),
-                            itemCount: filteredProducts.length,
-                            itemBuilder: (context, index) {
-                              return ProductCard(
-                                product: filteredProducts[index],
-                              );
-                            },
+                          child: CustomScrollView(
+                            controller: _scrollController,
+                            slivers: [
+                              SliverPadding(
+                                padding: const EdgeInsets.all(16),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        childAspectRatio: 0.75,
+                                        crossAxisSpacing: 16,
+                                        mainAxisSpacing: 16,
+                                      ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) => ProductCard(
+                                      product: filteredProducts[index],
+                                    ),
+                                    childCount: filteredProducts.length,
+                                  ),
+                                ),
+                              ),
+                              if (isLoadingMore)
+                                const SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                 ),
@@ -203,10 +260,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
           _applyFiltersAndSort();
         });
       },
-      backgroundColor: Colors.grey[200],
-      selectedColor: primaryColor,
+      backgroundColor: AppColors.surfaceSoft,
+      selectedColor: AppColors.primary,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : Colors.black,
+        color: isSelected ? AppColors.white : AppColors.textPrimary,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
     );

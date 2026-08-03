@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../core/constants.dart';
+import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -32,11 +32,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('إنشاء حساب'),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('إنشاء حساب')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Consumer<AuthProvider>(
@@ -48,19 +44,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   const Text(
                     'أنشئ حسابك الجديد',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'أدخل بياناتك لإنشاء حساب في دار البراق',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 14, color: AppColors.textMuted),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
@@ -68,25 +58,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade100,
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade300),
+                        border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, color: Colors.red.shade600),
+                          const Icon(
+                            Icons.error_outline,
+                            color: AppColors.error,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               authProvider.error!,
-                              style: TextStyle(
-                                color: Colors.red.shade600,
+                              style: const TextStyle(
+                                color: AppColors.error,
                                 fontSize: 14,
                               ),
                             ),
                           ),
                           IconButton(
-                            icon: Icon(Icons.close, color: Colors.red.shade600),
+                            icon: const Icon(
+                              Icons.close,
+                              color: AppColors.error,
+                            ),
                             onPressed: authProvider.clearError,
                           ),
                         ],
@@ -104,8 +102,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'أدخل الاسم الأول' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'أدخل الاسم الأول'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -134,7 +133,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'أدخل البريد الإلكتروني';
+                      if (v == null || v.trim().isEmpty)
+                        return 'أدخل البريد الإلكتروني';
                       if (!v.contains('@')) return 'البريد الإلكتروني غير صحيح';
                       return null;
                     },
@@ -180,7 +180,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'أدخل كلمة المرور';
-                      if (v.length < 6) return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
+                      if (v.length < 6)
+                        return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
                       return null;
                     },
                   ),
@@ -205,13 +206,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('تم إنشاء الحساب وتسجيل الدخول بنجاح'),
+                                  content: Text(
+                                    'تم إنشاء الحساب وتسجيل الدخول بنجاح',
+                                  ),
                                 ),
                               );
                             }
                           },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -223,7 +225,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text(
@@ -239,16 +243,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         'لديك حساب بالفعل؟ ',
-                        style: TextStyle(color: Colors.grey[600]),
+                        style: TextStyle(color: AppColors.textMuted),
                       ),
                       GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
-                        child: Text(
+                        child: const Text(
                           'تسجيل الدخول',
                           style: TextStyle(
-                            color: primaryColor,
+                            color: AppColors.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

@@ -15,9 +15,13 @@ class Review {
 
   factory Review.fromJson(Map<String, dynamic> json) {
     return Review(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id']?.toString() ?? '') ?? 0,
       author: json['author']?.toString() ?? '',
-      rating: json['rating'] is int ? json['rating'] : int.tryParse(json['rating']?.toString() ?? '') ?? 0,
+      rating: json['rating'] is int
+          ? json['rating']
+          : int.tryParse(json['rating']?.toString() ?? '') ?? 0,
       content: json['content']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
     );

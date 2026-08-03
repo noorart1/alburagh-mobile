@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api_service.dart';
+import '../core/theme/app_colors.dart';
 import '../models/product.dart';
 import '../widgets/product_card.dart';
 
@@ -51,10 +52,9 @@ class _SearchScreenState extends State<SearchScreen> {
             child: TextField(
               controller: _controller,
               onChanged: _search,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'ابحث عن منتج...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                prefixIcon: Icon(Icons.search),
               ),
             ),
           ),
@@ -65,7 +65,12 @@ class _SearchScreenState extends State<SearchScreen> {
             )
           else if (_products.isEmpty)
             const Expanded(
-              child: Center(child: Text('اكتب كلمة بحث لعرض النتائج')),
+              child: Center(
+                child: Text(
+                  'اكتب كلمة بحث لعرض النتائج',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ),
             )
           else
             Expanded(
@@ -78,7 +83,8 @@ class _SearchScreenState extends State<SearchScreen> {
                   mainAxisSpacing: 16,
                 ),
                 itemCount: _products.length,
-                itemBuilder: (context, index) => ProductCard(product: _products[index]),
+                itemBuilder: (context, index) =>
+                    ProductCard(product: _products[index]),
               ),
             ),
         ],
