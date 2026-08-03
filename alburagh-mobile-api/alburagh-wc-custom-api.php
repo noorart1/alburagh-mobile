@@ -52,6 +52,32 @@ exit;
 }
 }, 0);
 
+// The website's /favorites/ (YITH wishlist) page hit the exact same
+// LiteSpeed full-page-cache staleness the REST API had above: an item
+// added from the app lands in the database immediately (confirmed via
+// GET alburagh/v1/debug/wishlist), but the page kept showing a cached
+// snapshot from before it was added until the cache was manually purged.
+// Mark this page uncacheable outright — a customer's own wishlist must
+// never be served from a shared/stale cache — using both LiteSpeed's own
+// recommended no-cache hook and the raw header fallback used above.
+add_action('template_redirect', function () {
+$is_wishlist_page = (function_exists('yith_wcwl_is_wishlist_page') && yith_wcwl_is_wishlist_page())
+|| (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/favorites/') !== false);
+
+if (!$is_wishlist_page) {
+return;
+}
+
+if (function_exists('do_action')) {
+do_action('litespeed_control_set_nocache', 'alburagh wishlist page must always be fresh');
+}
+
+if (!headers_sent()) {
+header('X-LiteSpeed-Cache-Control: no-cache');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+}
+}, 0);
+
 // Cash on delivery is Iraq-only. Accepts either an ISO code ('IQ') or a
 // free-text country name, since the mobile app's address form is a plain
 // text field rather than the country dropdown the website checkout uses.
@@ -1104,6 +1130,7 @@ $wpdb->insert($items_table, array(
 ));
 }
 
+$this->invalidate_wishlist_cache($wishlist_id);
 return $this->get_wishlist($request);
 }
 
@@ -1125,7 +1152,26 @@ $wpdb->delete($items_table, array(
 'prod_id' => $product_id,
 ));
 
+$this->invalidate_wishlist_cache($wishlist_id);
 return $this->get_wishlist($request);
+}
+
+// Writing straight to YITH's tables (rather than through YITH's own
+// add()/remove() PHP methods, whose exact method names/signatures aren't
+// something we can verify without their source) skips whatever cache
+// invalidation those methods normally trigger. Confirmed symptom: the
+// item is correctly in the DB right after the app writes it (see
+// GET /debug/wishlist), but /favorites/ keeps showing the pre-add list
+// until an action that goes through YITH's own code (e.g. removing an
+// item on the website) happens to flush it. Flushing the object cache
+// here — right after our own writes — closes that gap without needing
+// to know YITH's internal cache keys.
+private function invalidate_wishlist_cache($wishlist_id) {
+wp_cache_flush();
+
+if (function_exists('do_action')) {
+do_action('litespeed_purge_all', 'alburagh wishlist updated');
+}
 }
 }
 
@@ -1384,6 +1430,52 @@ class AlBuragh_API_Debug_Controller {
 
     return new WP_REST_Response($result, 200);
   }
+
+  // Diagnoses "app favorites don't show on the website" reports: the app
+  // and the website must be reading/writing the exact same YITH wishlist
+  // row for this user. If get_or_create_wishlist_id() ever fails to find
+  // the website's existing default wishlist (e.g. a different is_default
+  // convention than assumed), it silently creates a second, disconnected
+  // one for the app — this dumps every wishlist row WordPress has for the
+  // user so that split is visible instead of guessed at.
+  public function debug_wishlist($request) {
+    global $wpdb;
+    $user_id = $this->get_user_id_from_request($request);
+    if (!$user_id) {
+      return new WP_Error('unauthorized', 'Token invalid', array('status' => 401));
+    }
+
+    $lists_table = $wpdb->prefix . 'yith_wcwl_lists';
+    $items_table = $wpdb->prefix . 'yith_wcwl';
+
+    $result = array(
+      'user_id' => $user_id,
+      'lists_table' => $lists_table,
+      'items_table' => $items_table,
+      'lists_table_exists' => (bool) $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $lists_table)),
+      'items_table_exists' => (bool) $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $items_table)),
+    );
+
+    if ($result['lists_table_exists']) {
+      $lists = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$lists_table} WHERE user_id = %d",
+        $user_id
+      ), ARRAY_A);
+      $result['wishlists_for_user'] = $lists;
+
+      if ($result['items_table_exists'] && $lists) {
+        foreach ($lists as $list) {
+          $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$items_table} WHERE wishlist_id = %d",
+            $list['ID']
+          ), ARRAY_A);
+          $result['items_by_wishlist_id'][$list['ID']] = $items;
+        }
+      }
+    }
+
+    return new WP_REST_Response($result, 200);
+  }
 }
 
 // 3. SECURE ENDPOINTS ROUTING SETUP
@@ -1566,6 +1658,12 @@ register_rest_route('alburagh/v1', '/orders/(?P<id>\d+)', array(
 register_rest_route('alburagh/v1', '/debug/cart', array(
 'methods' => 'GET',
 'callback' => array($debug, 'debug_cart'),
+'permission_callback' => '__return_true'
+));
+
+register_rest_route('alburagh/v1', '/debug/wishlist', array(
+'methods' => 'GET',
+'callback' => array($debug, 'debug_wishlist'),
 'permission_callback' => '__return_true'
 ));
 });
