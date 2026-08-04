@@ -695,18 +695,18 @@ $products[] = $this->format_product($product, $currency);
 return new WP_REST_Response($products, 200);
 }
 
-// Ranks products by units sold in paid orders placed in the last 30 days,
+// Ranks products by units sold in paid orders placed in the last 60 days,
 // falling back to WooCommerce's lifetime total_sales counter if the store
 // hasn't sold anything in that window yet (new store, or just a slow month)
 // so the home screen section isn't left empty.
 public function get_best_sellers($request) {
 $currency = $this->currency_from_request($request);
-$product_ids = $this->top_selling_product_ids(30, 10);
+$product_ids = $this->top_selling_product_ids(60, 20);
 
 if (empty($product_ids)) {
 $args = array(
 'post_type'      => 'product',
-'posts_per_page' => 10,
+'posts_per_page' => 20,
 'meta_key'       => 'total_sales',
 'orderby'        => 'meta_value_num',
 'order'          => 'DESC',
