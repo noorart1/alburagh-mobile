@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
+import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/category.dart';
@@ -12,6 +15,7 @@ import '../providers/currency_provider.dart';
 import '../providers/recently_viewed_provider.dart';
 import '../widgets/product_card.dart';
 import 'category_screen.dart';
+import 'product_detail_screen.dart';
 import 'product_list_screen.dart';
 import 'search_screen.dart';
 
@@ -130,48 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     SliverPersistentHeader(
                       pinned: true,
-                      delegate: _SearchBarDelegate(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          child: GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SearchScreen(),
-                              ),
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceSoft,
-                                borderRadius: AppRadius.lgRadius,
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(
-                                    Icons.search,
-                                    color: AppColors.textMuted,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'ابحث عن المنتجات والفئات...',
-                                    style: TextStyle(
-                                      color: AppColors.textMuted,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      delegate: _SearchBarDelegate(child: _HomeSearchBar()),
                     ),
                     SliverToBoxAdapter(
                       child: Column(
@@ -349,15 +312,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             products: featuredProducts,
                             // "More" here browses the whole catalog rather than
                             // the other featured picks (which don't really have
-                            // "more" beyond the handful already shown).
-                            seeMoreBuilder: (context) => CategoryScreen(
-                              category: Category(
-                                id: 0,
-                                name: 'كل الكتب',
-                                imageUrl: '',
-                                slug: 'all-books',
-                              ),
-                            ),
+                            // "more" beyond the handful already shown). No
+                            // category filter at all -- not a magic "all
+                            // books" category slug, which requires every
+                            // product to be manually tagged into it and
+                            // silently undercounts whenever that's missed.
+                            seeMoreBuilder: (context) =>
+                                const CategoryScreen(title: 'كل الكتب'),
                           ),
                           _buildSection(
                             title: 'الأكثر مبيعاً',
@@ -448,6 +409,290 @@ class _HomeScreenState extends State<HomeScreen> {
 /// Keeps the search bar pinned at the top of the scroll view (below the
 /// logo, which scrolls away normally) instead of scrolling off along with
 /// the rest of the home screen content.
+/// The pinned search field itself: as-you-type suggestions in a floating
+/// dropdown (via CompositedTransformTarget/Follower + an Overlay, so it
+/// draws above the rest of the scroll content regardless of where the
+/// pinned header currently sits), separate from the full results grid on
+/// SearchScreen. Tapping a suggestion jumps straight to that product;
+/// submitting (or the "see all" row) opens the full results grid.
+class _HomeSearchBar extends StatefulWidget {
+  @override
+  State<_HomeSearchBar> createState() => _HomeSearchBarState();
+}
+
+class _HomeSearchBarState extends State<_HomeSearchBar> {
+  final ApiService _api = ApiService();
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final LayerLink _layerLink = LayerLink();
+
+  Timer? _debounce;
+  int _searchGeneration = 0;
+  List<Product> _suggestions = [];
+  bool _isLoading = false;
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _removeOverlay();
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!_focusNode.hasFocus) {
+      _removeOverlay();
+    } else if (_controller.text.trim().isNotEmpty) {
+      _showOverlay();
+    }
+  }
+
+  void _onChanged(String query) {
+    _debounce?.cancel();
+
+    if (query.trim().isEmpty) {
+      setState(() {
+        _suggestions = [];
+        _isLoading = false;
+      });
+      _removeOverlay();
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    _showOverlay();
+    _debounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _search(query.trim()),
+    );
+  }
+
+  Future<void> _search(String query) async {
+    final generation = ++_searchGeneration;
+
+    try {
+      final data = await _api.searchProducts(
+        query,
+        currency: context.read<CurrencyProvider>().currency,
+      );
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _suggestions = data.map((p) => Product.fromJson(p)).take(5).toList();
+        _isLoading = false;
+      });
+      _showOverlay();
+    } catch (_) {
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _openFullResults() {
+    final query = _controller.text.trim();
+    if (query.isEmpty) return;
+    _focusNode.unfocus();
+    _removeOverlay();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SearchScreen(initialQuery: query),
+      ),
+    );
+  }
+
+  void _openProduct(Product product) {
+    _focusNode.unfocus();
+    _removeOverlay();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailScreen(product: product),
+      ),
+    );
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final width = renderBox?.size.width ?? MediaQuery.of(context).size.width;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: width,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomLeft,
+          followerAnchor: Alignment.topLeft,
+          offset: const Offset(0, 6),
+          child: _SuggestionsPanel(
+            isLoading: _isLoading,
+            suggestions: _suggestions,
+            onProductTap: _openProduct,
+            onSeeAllTap: _openFullResults,
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSoft,
+            borderRadius: AppRadius.lgRadius,
+          ),
+          child: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            onChanged: _onChanged,
+            onSubmitted: (_) => _openFullResults(),
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              hintText: 'ابحث عن المنتجات والفئات...',
+              hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
+              prefixIcon: Icon(Icons.search, color: AppColors.textMuted),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionsPanel extends StatelessWidget {
+  final bool isLoading;
+  final List<Product> suggestions;
+  final ValueChanged<Product> onProductTap;
+  final VoidCallback onSeeAllTap;
+
+  const _SuggestionsPanel({
+    required this.isLoading,
+    required this.suggestions,
+    required this.onProductTap,
+    required this.onSeeAllTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 6,
+      borderRadius: AppRadius.mdRadius,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 360),
+        child: isLoading
+            ? const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            : suggestions.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'لا توجد نتائج',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: suggestions.length,
+                      itemBuilder: (context, index) {
+                        final product = suggestions[index];
+                        return ListTile(
+                          dense: true,
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: product.imageUrl.isEmpty
+                                  ? Container(color: AppColors.surfaceSoft)
+                                  : CachedNetworkImage(
+                                      imageUrl: product.imageUrl,
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                          ),
+                          title: Text(
+                            product.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Text(
+                            CurrencyUtils.formatString(
+                              product.price,
+                              product.currencySymbol,
+                            ),
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          onTap: () => onProductTap(product),
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    dense: true,
+                    title: const Text(
+                      'عرض كل النتائج',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward,
+                      color: AppColors.primary,
+                      size: 18,
+                    ),
+                    onTap: onSeeAllTap,
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
 class _SearchBarDelegate extends SliverPersistentHeaderDelegate {
   final Widget child;
 
