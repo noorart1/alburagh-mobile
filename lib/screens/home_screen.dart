@@ -158,7 +158,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       CarouselSlider.builder(
                         itemCount: _bannerImageUrls.length,
                         options: CarouselOptions(
-                          height: 190,
+                          // Matches the banner images' actual 1343x571
+                          // pixel size so BoxFit.cover below shows each one
+                          // in full instead of cropping it to fit a fixed
+                          // height that doesn't match their real proportions.
+                          aspectRatio: 1343 / 571,
                           autoPlay: true,
                           autoPlayInterval: const Duration(seconds: 4),
                           enlargeCenterPage: true,
