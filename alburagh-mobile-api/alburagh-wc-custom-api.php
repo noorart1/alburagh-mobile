@@ -210,7 +210,19 @@ add_action('init', 'alburagh_handle_autologin', 1);
 
 // Ensure JWT Library or helper helper classes are configured
 class AlBuragh_JWT_Auth {
-private static $secret_key = '3yT!9Kq#Lz7@aP1$Vn8XmR2&wQ5HsE0';
+// The secret must come from wp-config.php (define('ALBURAGH_JWT_SECRET', '...')),
+// never be hardcoded here: this file is committed to git, and a previous
+// version had the real secret in plain text in this repo's history — that
+// value must be treated as permanently compromised. Fails loudly instead of
+// falling back to any built-in value, since silently signing tokens with a
+// known/public secret is worse than breaking auth until it's configured.
+private static function secret_key() {
+if (defined('ALBURAGH_JWT_SECRET') && ALBURAGH_JWT_SECRET !== '') {
+return ALBURAGH_JWT_SECRET;
+}
+
+wp_die('ALBURAGH_JWT_SECRET is not defined in wp-config.php. Add define(\'ALBURAGH_JWT_SECRET\', \'...\'); with a strong random value before this plugin can issue or validate tokens.');
+}
 
 public static function generate_token($user) {
 $issued_at = time();
@@ -232,7 +244,7 @@ $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
 $payload = json_encode($payload);
 $base64UrlHeader = self::base64UrlEncode($header);
 $base64UrlPayload = self::base64UrlEncode($payload);
-$signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, self::$secret_key, true);
+$signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, self::secret_key(), true);
 $base64UrlSignature = self::base64UrlEncode($signature);
 
 return $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
@@ -245,7 +257,7 @@ return false;
 }
 
 list($header, $payload, $signature) = $parts;
-$sig_check = hash_hmac('sha256', $header . "." . $payload, self::$secret_key, true);
+$sig_check = hash_hmac('sha256', $header . "." . $payload, self::secret_key(), true);
 
 if (self::base64UrlEncode($sig_check) !== $signature) {
 return false;

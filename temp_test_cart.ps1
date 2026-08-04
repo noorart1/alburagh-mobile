@@ -1,5 +1,15 @@
+# Reads credentials from environment variables instead of hardcoding them,
+# so this script can stay in version control without leaking a live admin
+# password. Set them before running:
+#   $env:ALBURAGH_TEST_USER = 'admin1'
+#   $env:ALBURAGH_TEST_PASS = '...'
+if (-not $env:ALBURAGH_TEST_USER -or -not $env:ALBURAGH_TEST_PASS) {
+    Write-Error "Set `$env:ALBURAGH_TEST_USER and `$env:ALBURAGH_TEST_PASS before running this script."
+    exit 1
+}
+
 $creds = @(
-  @{ u='admin1'; p='@Alburagh@iq@123' }
+  @{ u=$env:ALBURAGH_TEST_USER; p=$env:ALBURAGH_TEST_PASS }
 )
 
 $base = 'https://alburagh.com/wp-json/alburagh/v1'
