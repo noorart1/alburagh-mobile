@@ -8,6 +8,7 @@ import 'providers/cart_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/currency_provider.dart';
 import 'providers/wishlist_provider.dart';
+import 'providers/recently_viewed_provider.dart';
 import 'screens/main_screen.dart';
 import 'screens/cart_screen.dart';
 
@@ -45,6 +46,7 @@ class MyApp extends StatelessWidget {
             return wishlist;
           },
         ),
+        ChangeNotifierProvider(create: (_) => RecentlyViewedProvider()),
         ChangeNotifierProxyProvider2<CartProvider, WishlistProvider, AuthProvider>(
           create: (context) => AuthProvider(
             Provider.of<CartProvider>(context, listen: false),

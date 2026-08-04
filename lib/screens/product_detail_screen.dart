@@ -7,6 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import '../providers/recently_viewed_provider.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -19,6 +20,14 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _selectedImageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Not awaited: purely local bookkeeping for the home screen's "recently
+    // viewed" section, shouldn't block or affect this screen either way.
+    context.read<RecentlyViewedProvider>().recordView(widget.product);
+  }
 
   List<String> get _imageUrls {
     if (widget.product.imageUrls.isNotEmpty) {

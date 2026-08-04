@@ -73,4 +73,27 @@ class Product {
       currencySymbol: json['currency_symbol']?.toString() ?? '\$',
     );
   }
+
+  /// Mirrors the shape fromJson() expects, so it round-trips through
+  /// storage (e.g. the recently-viewed list) without needing a second,
+  /// parallel serialization format.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'price': price,
+    'regular_price': regularPrice,
+    'images': imageUrls.map((src) => {'src': src}).toList(),
+    'short_description': description,
+    'type': type,
+    'external_url': externalUrl,
+    'button_text': buttonText,
+    'categories': category.isNotEmpty
+        ? [
+            {'name': category},
+          ]
+        : <Map<String, String>>[],
+    'average_rating': averageRating.toString(),
+    'stock_status': inStock ? 'instock' : 'outofstock',
+    'currency_symbol': currencySymbol,
+  };
 }
