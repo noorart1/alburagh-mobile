@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import '../providers/wishlist_provider.dart';
 import 'home_screen.dart';
 import 'all_categories_screen.dart';
 import 'cart_screen.dart';
@@ -28,13 +31,35 @@ class _MainScreenState extends State<MainScreen> {
     ProfileScreen(),
   ];
 
-  final List<BottomNavigationBarItem> _items = const [
-    BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
-    BottomNavigationBarItem(icon: Icon(Icons.category), label: 'الأقسام'),
-    BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'السلة'),
-    BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'المفضلة'),
-    BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
-  ];
+  List<BottomNavigationBarItem> _buildItems(int cartCount, int wishlistCount) {
+    return [
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.home),
+        label: 'الرئيسية',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.category),
+        label: 'الأقسام',
+      ),
+      BottomNavigationBarItem(
+        icon: _badgedIcon(Icons.shopping_cart, cartCount),
+        label: 'السلة',
+      ),
+      BottomNavigationBarItem(
+        icon: _badgedIcon(Icons.favorite, wishlistCount),
+        label: 'المفضلة',
+      ),
+      const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
+    ];
+  }
+
+  Widget _badgedIcon(IconData icon, int count) {
+    return Badge(
+      isLabelVisible: count > 0,
+      label: Text(count > 99 ? '99+' : '$count'),
+      child: Icon(icon),
+    );
+  }
 
   void _onTabTapped(int index) {
     if (index == _currentIndex) {
@@ -61,6 +86,11 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cartCount = context.select<CartProvider, int>((c) => c.itemCount);
+    final wishlistCount = context.select<WishlistProvider, int>(
+      (w) => w.itemCount,
+    );
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -84,7 +114,7 @@ class _MainScreenState extends State<MainScreen> {
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: _onTabTapped,
-          items: _items,
+          items: _buildItems(cartCount, wishlistCount),
         ),
       ),
     );
