@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "160864816610",
+    "firebase_url": "https://alburagh-free.firebaseio.com",
+    "project_id": "alburagh-free",
+    "storage_bucket": "alburagh-free.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:160864816610:android:f76faaa9315fdbfd7ffdbb",
+        "android_client_info": {
+          "package_name": "com.alburagh.webapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "160864816610-147hbeb5im9t4sq73k3uj1phjmmungvb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvMkPyFYaERU9QK4o3gavi4QA_hkeEjxQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "160864816610-147hbeb5im9t4sq73k3uj1phjmmungvb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
