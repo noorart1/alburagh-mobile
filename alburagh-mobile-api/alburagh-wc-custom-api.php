@@ -532,9 +532,17 @@ public function update_profile($request) {
 
     if ($first_name !== null) {
         wp_update_user(array('ID' => $user_id, 'first_name' => $first_name));
+        // WooCommerce checkout reads billing_first_name/shipping_first_name
+        // user meta, not the core WP first_name field set above -- without
+        // this, name saved from the app would show up in the app (which
+        // reads the core field back) but stay blank on the website checkout.
+        update_user_meta($user_id, 'billing_first_name', $first_name);
+        update_user_meta($user_id, 'shipping_first_name', $first_name);
     }
     if ($last_name !== null) {
         wp_update_user(array('ID' => $user_id, 'last_name' => $last_name));
+        update_user_meta($user_id, 'billing_last_name', $last_name);
+        update_user_meta($user_id, 'shipping_last_name', $last_name);
     }
     if ($email !== null && $email !== '') {
         wp_update_user(array('ID' => $user_id, 'user_email' => $email));
