@@ -695,6 +695,68 @@ $products[] = $this->format_product($product, $currency);
 return new WP_REST_Response($products, 200);
 }
 
+// Ranks products by units sold in paid orders placed in the last 30 days,
+// falling back to WooCommerce's lifetime total_sales counter if the store
+// hasn't sold anything in that window yet (new store, or just a slow month)
+// so the home screen section isn't left empty.
+public function get_best_sellers($request) {
+$currency = $this->currency_from_request($request);
+$product_ids = $this->top_selling_product_ids(30, 10);
+
+if (empty($product_ids)) {
+$args = array(
+'post_type'      => 'product',
+'posts_per_page' => 10,
+'meta_key'       => 'total_sales',
+'orderby'        => 'meta_value_num',
+'order'          => 'DESC',
+);
+$query = new WP_Query($args);
+$product_ids = wp_list_pluck($query->posts, 'ID');
+}
+
+$products = array();
+foreach ($product_ids as $product_id) {
+$product = wc_get_product($product_id);
+if ($product) {
+$products[] = $this->format_product($product, $currency);
+}
+}
+
+return new WP_REST_Response($products, 200);
+}
+
+// Sums line-item quantities across paid orders from the last $days days
+// and returns the top $limit product IDs. Uses wc_get_orders()/get_items()
+// rather than a direct SQL join so this works the same whether the store
+// is on legacy post-based orders or HPOS.
+private function top_selling_product_ids($days, $limit) {
+$orders = wc_get_orders(array(
+'status'       => wc_get_is_paid_statuses(),
+'date_created' => '>' . (time() - ($days * DAY_IN_SECONDS)),
+'limit'        => 500,
+'return'       => 'objects',
+));
+
+$quantities = array();
+foreach ($orders as $order) {
+foreach ($order->get_items() as $item) {
+$product_id = $item->get_product_id();
+if (!$product_id) {
+continue;
+}
+if (!isset($quantities[$product_id])) {
+$quantities[$product_id] = 0;
+}
+$quantities[$product_id] += $item->get_quantity();
+}
+}
+
+arsort($quantities);
+
+return array_slice(array_keys($quantities), 0, $limit);
+}
+
 public function search($request) {
 $q = sanitize_text_field($request->get_param('q'));
 if (empty($q)) {
@@ -1837,6 +1899,11 @@ register_rest_route('alburagh/v1', '/new-arrivals', array(
 register_rest_route('alburagh/v1', '/sale-products', array(
 'methods' => 'GET',
 'callback' => array($prod, 'get_sale_products'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/best-sellers', array(
+'methods' => 'GET',
+'callback' => array($prod, 'get_best_sellers'),
 'permission_callback' => '__return_true'
 ));
 register_rest_route('alburagh/v1', '/search', array(
