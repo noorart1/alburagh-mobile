@@ -757,26 +757,114 @@ arsort($quantities);
 return array_slice(array_keys($quantities), 0, $limit);
 }
 
+// Strips Arabic diacritics (tashkeel) and tatweel, and unifies letter
+// variants that people type interchangeably (alef forms, taa marbuta/haa,
+// alef maqsura/yaa), so search matches regardless of whether the stored
+// title happens to include diacritics the user didn't type -- WordPress's
+// default 's' search does a literal SQL match and fails completely on
+// that mismatch, even for an otherwise exact title match. Also unifies the
+// Persian/Farsi variants of yeh and kaf (ی، ک) with their Arabic
+// equivalents (ي، ك) -- visually near-identical but different code
+// points, and many keyboards/IMEs produce the Persian ones by default even
+// when the user is typing Arabic.
+private function normalize_arabic($text) {
+$text = (string) $text;
+$text = preg_replace(
+'/[\x{0610}-\x{061A}\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06DC}\x{06DF}-\x{06E8}\x{06EA}-\x{06ED}\x{0640}]/u',
+'',
+$text
+);
+$text = preg_replace('/[\x{0622}\x{0623}\x{0625}\x{0671}]/u', 'ا', $text);
+$text = str_replace(
+array('ة', 'ى', 'ی', 'ک'),
+array('ه', 'ي', 'ي', 'ك'),
+$text
+);
+return mb_strtolower(trim($text));
+}
+
 public function search($request) {
 $q = sanitize_text_field($request->get_param('q'));
 if (empty($q)) {
 return new WP_REST_Response(array(), 200);
 }
 
-$args = array(
+$normalized_q = $this->normalize_arabic($q);
+
+// Same category param convention as get_products(): numeric term_id or
+// a slug. Lets a category/all-books screen's own in-page search box
+// scope results to what's actually being browsed instead of the whole
+// catalog.
+$category_param = $request->get_param('category');
+$category_field = 'term_id';
+$category_value = null;
+
+if ($category_param !== null && $category_param !== '') {
+if (is_numeric($category_param)) {
+$category_value = intval($category_param);
+} else {
+$category_field = 'slug';
+$category_value = sanitize_title($category_param);
+}
+}
+
+$id_query_args = array(
+'post_type'      => 'product',
+'post_status'    => 'publish',
+'posts_per_page' => -1,
+'fields'         => 'ids',
+);
+if ($category_value) {
+$id_query_args['tax_query'] = array(
+array(
+'taxonomy' => 'product_cat',
+'field'    => $category_field,
+'terms'    => $category_value,
+),
+);
+}
+
+// Diacritic-insensitive title match, done in PHP since MySQL's LIKE
+// (used by WP_Query's 's' param) can't be told to ignore Arabic
+// diacritics. The catalog is small enough (a few hundred products) for
+// scanning every title to be cheap.
+$all_ids = get_posts($id_query_args);
+
+$matched_ids = array();
+foreach ($all_ids as $post_id) {
+if (mb_strpos($this->normalize_arabic(get_the_title($post_id)), $normalized_q) !== false) {
+$matched_ids[] = $post_id;
+if (count($matched_ids) >= 15) {
+break;
+}
+}
+}
+
+// Fall back to WordPress's own search if nothing matched by title --
+// covers matches in product content/excerpt, which the loop above
+// doesn't check.
+if (empty($matched_ids)) {
+$fallback_args = array(
 'post_type'      => 'product',
 'posts_per_page' => 15,
 's'              => $q,
 'post_status'    => 'publish'
 );
+if ($category_value) {
+$fallback_args['tax_query'] = $id_query_args['tax_query'];
+}
+$query = new WP_Query($fallback_args);
+$matched_ids = wp_list_pluck($query->posts, 'ID');
+}
 
-$query = new WP_Query($args);
 $products = array();
 $currency = $this->currency_from_request($request);
 
-foreach ($query->posts as $post) {
-$product = wc_get_product($post->ID);
+foreach ($matched_ids as $post_id) {
+$product = wc_get_product($post_id);
+if ($product) {
 $products[] = $this->format_product($product, $currency);
+}
 }
 
 return new WP_REST_Response($products, 200);

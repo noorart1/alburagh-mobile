@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
@@ -9,9 +11,19 @@ import '../providers/currency_provider.dart';
 import '../widgets/product_card.dart';
 
 class CategoryScreen extends StatefulWidget {
-  final Category category;
+  // Null means "no category filter" -- browse the full catalog, matching
+  // exactly what the website's shop page shows. Kept separate from a magic
+  // "all books" category value, since that requires every product to be
+  // manually tagged into that category on the WooCommerce side and silently
+  // drifts out of sync (undercounting) whenever that tagging is missed.
+  final Category? category;
+  final String? title;
 
-  const CategoryScreen({super.key, required this.category});
+  const CategoryScreen({super.key, this.category, this.title})
+    : assert(
+        category != null || title != null,
+        'CategoryScreen needs a category or an explicit title',
+      );
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
@@ -31,6 +43,16 @@ class _CategoryScreenState extends State<CategoryScreen> {
   String sortBy = 'newest';
   String searchQuery = '';
 
+  // The in-page search box used to just String.contains()-filter whatever
+  // page of `products` happened to be loaded so far -- diacritic-sensitive
+  // and blind to anything not yet scrolled into view. It now calls the same
+  // diacritic-normalizing /search endpoint the home screen uses, scoped to
+  // this category (or the whole catalog when there isn't one).
+  List<Product> _searchResults = [];
+  bool _isSearching = false;
+  Timer? _debounce;
+  int _searchGeneration = 0;
+
   late final CurrencyProvider _currencyProvider;
 
   @override
@@ -44,6 +66,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _currencyProvider.removeListener(_onCurrencyChanged);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -53,10 +76,53 @@ class _CategoryScreenState extends State<CategoryScreen> {
   void _onCurrencyChanged() => loadProducts();
 
   void _onScroll() {
+    // Search results aren't paginated (capped server-side); only the
+    // normal unfiltered browse list loads more as you scroll.
+    if (searchQuery.isNotEmpty) return;
     if (!hasMore || isLoadingMore || isLoading) return;
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 300) {
       _loadMoreProducts();
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    setState(() => searchQuery = query);
+
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      _applyFiltersAndSort();
+      return;
+    }
+
+    setState(() => _isSearching = true);
+    _debounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _search(query.trim()),
+    );
+  }
+
+  Future<void> _search(String query) async {
+    final generation = ++_searchGeneration;
+    try {
+      final data = await _api.searchProducts(
+        query,
+        currency: _currencyProvider.currency,
+        category: widget.category?.slug ?? widget.category?.id.toString(),
+      );
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _searchResults = data.map((p) => Product.fromJson(p)).toList();
+        _isSearching = false;
+        _applyFiltersAndSort();
+      });
+    } catch (_) {
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() => _isSearching = false);
     }
   }
 
@@ -65,7 +131,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
       if (!mounted) return;
       setState(() => isLoading = true);
       final prodData = await _api.getProducts(
-        category: widget.category.slug ?? widget.category.id.toString(),
+        category: widget.category?.slug ?? widget.category?.id.toString(),
         page: 1,
         perPage: _perPage,
         currency: _currencyProvider.currency,
@@ -96,7 +162,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     try {
       final nextPage = _page + 1;
       final prodData = await _api.getProducts(
-        category: widget.category.slug ?? widget.category.id.toString(),
+        category: widget.category?.slug ?? widget.category?.id.toString(),
         page: nextPage,
         perPage: _perPage,
         currency: _currencyProvider.currency,
@@ -116,9 +182,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   void _applyFiltersAndSort() {
-    filteredProducts = products.where((p) {
-      return p.name.contains(searchQuery);
-    }).toList();
+    filteredProducts = searchQuery.trim().isEmpty
+        ? List.of(products)
+        : List.of(_searchResults);
 
     switch (sortBy) {
       case 'price_low':
@@ -140,7 +206,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.category.name),
+        title: Text(widget.title ?? widget.category!.name),
         actions: [
           IconButton(
             icon: Badge(
@@ -161,15 +227,22 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   child: Column(
                     children: [
                       TextField(
-                        onChanged: (value) {
-                          setState(() {
-                            searchQuery = value;
-                            _applyFiltersAndSort();
-                          });
-                        },
-                        decoration: const InputDecoration(
+                        onChanged: _onSearchChanged,
+                        decoration: InputDecoration(
                           hintText: 'ابحث في المنتجات...',
-                          prefixIcon: Icon(Icons.search),
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _isSearching
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
                       const SizedBox(height: 12),

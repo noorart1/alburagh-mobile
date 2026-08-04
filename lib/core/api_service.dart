@@ -126,10 +126,18 @@ class ApiService {
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
-  Future<List<dynamic>> searchProducts(String query, {String? currency}) async {
+  Future<List<dynamic>> searchProducts(
+    String query, {
+    String? currency,
+    String? category,
+  }) async {
     final response = await _dio.get(
       'search',
-      queryParameters: {'q': query, if (currency != null) 'currency': currency},
+      queryParameters: {
+        'q': query,
+        if (currency != null) 'currency': currency,
+        if (category != null && category.isNotEmpty) 'category': category,
+      },
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
