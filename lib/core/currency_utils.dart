@@ -19,4 +19,11 @@ class CurrencyUtils {
   static String formatString(String rawAmount, String symbol) {
     return format(double.tryParse(rawAmount) ?? 0, symbol);
   }
+
+  /// Maps a WooCommerce currency code (e.g. from an order's own
+  /// get_currency(), which may differ from the app's currently selected
+  /// display currency) to the symbol format() expects.
+  static String symbolForCode(String code) {
+    return code.toUpperCase() == 'IQD' ? 'د.ع' : '\$';
+  }
 }

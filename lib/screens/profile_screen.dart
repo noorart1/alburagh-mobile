@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
 import '../core/currency_utils.dart';
+import '../core/order_status.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user.dart';
 import '../providers/cart_provider.dart';
@@ -12,6 +13,7 @@ import '../providers/currency_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
+import 'order_detail_screen.dart';
 import 'register_screen.dart';
 import 'wishlist_screen.dart';
 
@@ -582,18 +584,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             const Text('لا توجد طلبات بعد.')
                           else
                             SizedBox(
-                              height: 220,
+                              height: 280,
                               child: ListView.builder(
                                 itemCount: orders.length,
                                 itemBuilder: (context, index) {
                                   final order =
                                       orders[index] as Map<String, dynamic>;
+                                  final orderId = order['id'] as int;
+                                  final status =
+                                      order['status']?.toString() ?? '';
+                                  final symbol = CurrencyUtils.symbolForCode(
+                                    order['currency']?.toString() ?? 'USD',
+                                  );
                                   return ListTile(
-                                    title: Text('الطلب #${order['id']}'),
+                                    title: Text('الطلب #$orderId'),
                                     subtitle: Text(
-                                      'الحالة: ${order['status']}',
+                                      orderStatusLabel(status),
+                                      style: TextStyle(
+                                        color: orderStatusColor(status),
+                                      ),
                                     ),
-                                    trailing: Text('${order['total']}'),
+                                    trailing: Text(
+                                      CurrencyUtils.format(
+                                        (order['total'] as num?)
+                                                ?.toDouble() ??
+                                            0,
+                                        symbol,
+                                      ),
+                                    ),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              OrderDetailScreen(
+                                                orderId: orderId,
+                                              ),
+                                        ),
+                                      );
+                                    },
                                   );
                                 },
                               ),
