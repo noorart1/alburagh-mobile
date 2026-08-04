@@ -239,20 +239,21 @@ class _ProductImageGallery extends StatelessWidget {
       children: [
         Hero(
           tag: 'product_$productId',
-          child: CachedNetworkImage(
-            imageUrl: imageUrls[selectedIndex],
+          child: Container(
             width: double.infinity,
             height: 300,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
+            color: AppColors.surfaceSoft,
+            child: CachedNetworkImage(
+              imageUrl: imageUrls[selectedIndex],
+              width: double.infinity,
               height: 300,
-              color: AppColors.surfaceSoft,
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-            errorWidget: (context, url, error) => Container(
-              height: 300,
-              color: AppColors.surfaceSoft,
-              child: const Icon(
+              // contain, not cover: book covers are usually portrait, and
+              // cover was cropping their top/bottom or sides to fill this
+              // wide box instead of showing the whole cover.
+              fit: BoxFit.contain,
+              placeholder: (context, url) =>
+                  const Center(child: CircularProgressIndicator()),
+              errorWidget: (context, url, error) => const Icon(
                 Icons.broken_image,
                 size: 88,
                 color: AppColors.textMuted,
