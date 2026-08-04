@@ -7,6 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/cart_item_card.dart';
+import 'login_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -65,15 +66,29 @@ class _CartScreenState extends State<CartScreen> {
   /// Sends the customer to the real website cart/checkout page — already
   /// logged in there if they're logged in in the app — so checkout (address,
   /// shipping, COD/PayPal/card, all of it) happens through WooCommerce's own
-  /// working checkout instead of being reimplemented in the app.
+  /// working checkout instead of being reimplemented in the app. Guests are
+  /// sent to the login screen first instead: the website checkout works fine
+  /// for guests too, but this store wants every order tied to an account.
   Future<void> _goToWebsiteCart() async {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يجب تسجيل الدخول لإتمام الشراء')),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
     setState(() => _checkoutLoading = true);
     try {
-      final auth = context.read<AuthProvider>();
       final token = auth.user?.token;
 
       Uri targetUri = _originalCartUri;
-      if (auth.isLoggedIn && token != null && token.isNotEmpty) {
+      if (token != null && token.isNotEmpty) {
         try {
           final url = await _api.createAutoLoginLink(
             token: token,
@@ -136,15 +151,22 @@ class _CartScreenState extends State<CartScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'الإجمالي',
+                          'المجموع الفرعي',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
+                          // Item prices only — no shipping/tax. The real,
+                          // final total (with the shipping method the
+                          // customer actually picks) is shown on the website
+                          // checkout this button redirects to; showing
+                          // WooCommerce's auto-estimated shipping/tax here
+                          // too just confuses customers with a number that
+                          // may not even match what they see next.
                           CurrencyUtils.format(
-                            cart.totalPrice,
+                            cart.subtotal,
                             cart.currencySymbol,
                           ),
                           style: const TextStyle(

@@ -317,7 +317,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                   );
                                   if (!context.mounted) return;
                                   if (success) {
-                                    Navigator.of(context).pushAndRemoveUntil(
+                                    // rootNavigator: true — LoginScreen can be
+                                    // reached by pushing onto a tab's own
+                                    // nested Navigator (e.g. cart's guest
+                                    // checkout redirect), and Navigator.of()
+                                    // without it would resolve to that nested
+                                    // one, pushing a second MainScreen (with
+                                    // its own bottom bar) inside the tab
+                                    // instead of resetting the whole app.
+                                    Navigator.of(
+                                      context,
+                                      rootNavigator: true,
+                                    ).pushAndRemoveUntil(
                                       MaterialPageRoute(
                                         builder: (context) =>
                                             const MainScreen(),
@@ -386,8 +397,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: authProvider.isLoading
                               ? null
                               : () {
-                                  // کاربر را به صفحه اصلی هدایت می‌کنیم
-                                  Navigator.of(context).pushReplacement(
+                                  // rootNavigator: true — see the same note
+                                  // on the login button above.
+                                  Navigator.of(
+                                    context,
+                                    rootNavigator: true,
+                                  ).pushReplacement(
                                     MaterialPageRoute(
                                       builder: (context) => const MainScreen(),
                                     ),
