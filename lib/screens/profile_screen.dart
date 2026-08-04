@@ -6,6 +6,7 @@ import '../core/api_service.dart';
 import '../core/constants.dart';
 import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
+import '../models/user.dart';
 import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
 import '../providers/auth_provider.dart';
@@ -84,61 +85,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = context.read<AuthProvider>();
 
     if (authProvider.isLoggedIn && authProvider.user != null) {
-      try {
-        final profile = await _api.getProfile(authProvider.user!.token ?? '');
+      // Usually already cached by AuthProvider right after login/auto-login,
+      // so this returns instantly instead of this screen making its own
+      // GET /profile round trip every time it's opened.
+      await authProvider.ensureProfileLoaded();
+      final profile = authProvider.profile;
+
+      if (profile != null) {
         if (!mounted) return;
-
-        // Try to load billing/shipping address from API
-        String firstName = profile['first_name']?.toString() ?? '';
-        String lastName = profile['last_name']?.toString() ?? '';
-        if (firstName.isEmpty) {
-          firstName = authProvider.user!.name.split(' ').first;
-        }
-        if (lastName.isEmpty && authProvider.user!.name.split(' ').length > 1) {
-          lastName = authProvider.user!.name.split(' ').skip(1).join(' ');
-        }
-
-        // billing address fields from profile
-        final billing = profile['billing'] as Map<String, dynamic>? ?? {};
-        final shipping = profile['shipping'] as Map<String, dynamic>? ?? {};
-
-        setState(() {
-          _firstNameController.text = firstName;
-          _lastNameController.text = lastName;
-          _phoneController.text =
-              profile['phone']?.toString() ??
-              billing['phone']?.toString() ??
-              '';
-          _emailController.text =
-              profile['email']?.toString() ?? authProvider.user!.email;
-          _address1Controller.text =
-              billing['address_1']?.toString() ??
-              shipping['address_1']?.toString() ??
-              '';
-          _address2Controller.text =
-              billing['address_2']?.toString() ??
-              shipping['address_2']?.toString() ??
-              '';
-          _cityController.text =
-              billing['city']?.toString() ?? shipping['city']?.toString() ?? '';
-          _stateController.text =
-              billing['state']?.toString() ??
-              shipping['state']?.toString() ??
-              '';
-          _postcodeController.text =
-              billing['postcode']?.toString() ??
-              shipping['postcode']?.toString() ??
-              '';
-          _countryController.text =
-              billing['country']?.toString() ??
-              shipping['country']?.toString() ??
-              '';
-          _isLoading = false;
-        });
+        _applyProfileData(profile, authProvider.user!);
         return;
-      } catch (_) {
-        // fall through to prefs
       }
+      // Preload failed (e.g. no connection at the time) — fall through to
+      // the cached prefs copy below rather than getting stuck loading.
     }
 
     if (!mounted) return;
@@ -153,6 +112,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _stateController.text = prefs.getString(_stateKey) ?? '';
       _postcodeController.text = prefs.getString(_postcodeKey) ?? '';
       _countryController.text = prefs.getString(_countryKey) ?? '';
+      _isLoading = false;
+    });
+  }
+
+  void _applyProfileData(Map<String, dynamic> profile, User user) {
+    String firstName = profile['first_name']?.toString() ?? '';
+    String lastName = profile['last_name']?.toString() ?? '';
+    if (firstName.isEmpty) {
+      firstName = user.name.split(' ').first;
+    }
+    if (lastName.isEmpty && user.name.split(' ').length > 1) {
+      lastName = user.name.split(' ').skip(1).join(' ');
+    }
+
+    final billing = profile['billing'] as Map<String, dynamic>? ?? {};
+    final shipping = profile['shipping'] as Map<String, dynamic>? ?? {};
+
+    setState(() {
+      _firstNameController.text = firstName;
+      _lastNameController.text = lastName;
+      _phoneController.text =
+          profile['phone']?.toString() ?? billing['phone']?.toString() ?? '';
+      _emailController.text = profile['email']?.toString() ?? user.email;
+      _address1Controller.text =
+          billing['address_1']?.toString() ??
+          shipping['address_1']?.toString() ??
+          '';
+      _address2Controller.text =
+          billing['address_2']?.toString() ??
+          shipping['address_2']?.toString() ??
+          '';
+      _cityController.text =
+          billing['city']?.toString() ?? shipping['city']?.toString() ?? '';
+      _stateController.text =
+          billing['state']?.toString() ?? shipping['state']?.toString() ?? '';
+      _postcodeController.text =
+          billing['postcode']?.toString() ??
+          shipping['postcode']?.toString() ??
+          '';
+      _countryController.text =
+          billing['country']?.toString() ??
+          shipping['country']?.toString() ??
+          '';
       _isLoading = false;
     });
   }
@@ -189,7 +191,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'phone': _phoneController.text.trim(),
       };
       try {
-        await _api.updateProfile(token, {
+        final updated = await _api.updateProfile(token, {
           'first_name': _firstNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
           'phone': _phoneController.text.trim(),
@@ -197,6 +199,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'billing': address,
           'shipping': address,
         });
+        // Keep AuthProvider's cached profile in sync with what was just
+        // saved — otherwise it would keep serving the pre-save snapshot to
+        // this screen (or others) until the next full app restart.
+        authProvider.setProfile(updated);
       } catch (e) {
         errorMessage = 'تم الحفظ على الجهاز فقط، فشل التحديث في الحساب: $e';
       }
@@ -374,8 +380,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           _CartSummary(
             itemCount: cart.itemCount,
+            // Item prices only — see the note on cart_screen.dart's subtotal
+            // display for why this isn't cart.totalPrice.
             totalPrice: CurrencyUtils.format(
-              cart.totalPrice,
+              cart.subtotal,
               cart.currencySymbol,
             ),
             onOpenCart: () {
@@ -1102,7 +1110,7 @@ class _CartSummary extends StatelessWidget {
             child: Icon(Icons.shopping_cart_outlined, color: primaryColor),
           ),
           title: Text('$itemCount منتج في السلة'),
-          subtitle: Text('المجموع: $totalPrice'),
+          subtitle: Text('المجموع الفرعي: $totalPrice'),
           trailing: const Icon(Icons.chevron_left),
           onTap: onOpenCart,
         ),

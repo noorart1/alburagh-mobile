@@ -16,10 +16,19 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  // Full profile (name/phone/billing/shipping) fetched once in the
+  // background right after login/auto-login, ahead of the user ever opening
+  // ProfileScreen, so that screen can render instantly from cache instead of
+  // making its own GET /profile round trip and showing a spinner every time
+  // it's opened.
+  Map<String, dynamic>? _profile;
+  Future<void>? _profileFuture;
+
   User? get user => _user;
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  Map<String, dynamic>? get profile => _profile;
 
   AuthProvider(this._cartProvider) {
     _loadSavedAuth();
@@ -38,6 +47,9 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       // Load cart after successful auto-login
       await _cartProvider.loadCart();
+      // Not awaited: runs in the background while the user is on whatever
+      // screen they land on first, so it's ready by the time they open theirs.
+      ensureProfileLoaded();
     }
   }
 
@@ -111,6 +123,8 @@ class AuthProvider extends ChangeNotifier {
 
       // Merge guest cart with user cart after successful login
       await _cartProvider.mergeCart(_cartProvider.items);
+      // Not awaited — see _loadSavedAuth() for why.
+      ensureProfileLoaded();
       return true;
     } on DioException catch (e) {
       if (e.response?.statusCode == 403) {
@@ -241,10 +255,44 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns the in-flight or already-completed profile fetch, starting one
+  /// if neither exists yet. Safe to call from multiple places (e.g. a screen
+  /// opened before the background preload finished) without triggering
+  /// duplicate GET /profile requests.
+  Future<void> ensureProfileLoaded() {
+    if (_profile != null) return Future.value();
+    return _profileFuture ??= _fetchProfile();
+  }
+
+  /// Updates the cached profile directly from data already fetched elsewhere
+  /// (e.g. the response of a PUT /profile save), instead of invalidating the
+  /// cache and forcing a redundant re-fetch.
+  void setProfile(Map<String, dynamic> profile) {
+    _profile = profile;
+    notifyListeners();
+  }
+
+  Future<void> _fetchProfile() async {
+    final token = _user?.token;
+    if (token == null) return;
+
+    try {
+      _profile = await _api.getProfile(token);
+      notifyListeners();
+    } catch (_) {
+      // Leave _profile null; the next ensureProfileLoaded() call (e.g. a
+      // manual retry) will simply try again.
+    } finally {
+      _profileFuture = null;
+    }
+  }
+
   Future<void> logout() async {
     _user = null;
     _isLoggedIn = false;
     _error = null;
+    _profile = null;
+    _profileFuture = null;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
