@@ -714,7 +714,7 @@ class _SearchBarDelegate extends SliverPersistentHeaderDelegate {
   ) {
     return ColoredBox(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: child,
+      child: SizedBox(height: _height, child: child),
     );
   }
 

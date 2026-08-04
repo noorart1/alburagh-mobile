@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,9 +18,14 @@ import 'screens/cart_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await PushNotifications.init();
+  // Firebase Web needs a FirebaseOptions config (via `flutterfire configure`)
+  // that this project doesn't have yet -- push notifications are
+  // Android/iOS-only for now.
+  if (!kIsWeb) {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await PushNotifications.init();
+  }
   final initialCurrency = await CurrencyProvider.loadInitial();
   runApp(MyApp(initialCurrency: initialCurrency));
 }
