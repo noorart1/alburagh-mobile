@@ -107,4 +107,14 @@ class WishlistProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  /// Drops the locally cached wishlist without touching the server copy.
+  /// Called on logout so the previous account's items (and the bottom bar
+  /// badge count) don't keep showing while logged out or after switching
+  /// accounts — unlike the cart, the wishlist itself is never deleted.
+  void reset() {
+    _items.clear();
+    _error = null;
+    notifyListeners();
+  }
 }

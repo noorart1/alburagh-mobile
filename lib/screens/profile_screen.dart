@@ -81,8 +81,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final prefs = await SharedPreferences.getInstance();
     final authProvider = context.read<AuthProvider>();
+    // This screen is built immediately at app start (it's one of
+    // MainScreen's IndexedStack tabs), which can race AuthProvider's
+    // saved-session restore. Wait for that to finish so isLoggedIn below
+    // reflects the real, restored state instead of its initial `false`.
+    await authProvider.initialized;
+    if (!mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
 
     if (authProvider.isLoggedIn && authProvider.user != null) {
       // Usually already cached by AuthProvider right after login/auto-login,

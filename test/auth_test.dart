@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:alburagh_app/providers/auth_provider.dart';
 import 'package:alburagh_app/providers/cart_provider.dart';
+import 'package:alburagh_app/providers/wishlist_provider.dart';
 import 'package:alburagh_app/screens/login_screen.dart';
 import 'package:alburagh_app/screens/register_screen.dart';
 
@@ -16,8 +17,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const LoginScreen(),
@@ -43,8 +48,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const LoginScreen(),
@@ -68,7 +77,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final cartProvider = CartProvider();
-      final authProvider = AuthProvider(cartProvider);
+      final authProvider = AuthProvider(cartProvider, WishlistProvider());
 
       await tester.pumpWidget(
         MaterialApp(
@@ -95,8 +104,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const RegisterScreen(),
@@ -122,8 +135,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const RegisterScreen(),
@@ -145,8 +162,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const RegisterScreen(),
@@ -167,8 +188,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const RegisterScreen(),
@@ -194,8 +219,12 @@ void main() {
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => CartProvider()),
+              ChangeNotifierProvider(create: (_) => WishlistProvider()),
               ChangeNotifierProvider(
-                create: (context) => AuthProvider(context.read<CartProvider>()),
+                create: (context) => AuthProvider(
+                  context.read<CartProvider>(),
+                  context.read<WishlistProvider>(),
+                ),
               ),
             ],
             child: const RegisterScreen(),
@@ -218,7 +247,7 @@ void main() {
 
   group('AuthProvider Tests', () {
     test('initial state should be logged out', () {
-      final authProvider = AuthProvider(CartProvider());
+      final authProvider = AuthProvider(CartProvider(), WishlistProvider());
 
       expect(authProvider.isLoggedIn, false);
       expect(authProvider.user, null);
@@ -227,7 +256,7 @@ void main() {
     });
 
     test('clearError should reset error to null', () {
-      final authProvider = AuthProvider(CartProvider());
+      final authProvider = AuthProvider(CartProvider(), WishlistProvider());
 
       authProvider.clearError();
       expect(authProvider.error, null);

@@ -45,11 +45,13 @@ class MyApp extends StatelessWidget {
             return wishlist;
           },
         ),
-        ChangeNotifierProxyProvider<CartProvider, AuthProvider>(
-          create: (context) =>
-              AuthProvider(Provider.of<CartProvider>(context, listen: false)),
-          update: (context, cartProvider, authProvider) =>
-              authProvider ?? AuthProvider(cartProvider),
+        ChangeNotifierProxyProvider2<CartProvider, WishlistProvider, AuthProvider>(
+          create: (context) => AuthProvider(
+            Provider.of<CartProvider>(context, listen: false),
+            Provider.of<WishlistProvider>(context, listen: false),
+          ),
+          update: (context, cartProvider, wishlistProvider, authProvider) =>
+              authProvider ?? AuthProvider(cartProvider, wishlistProvider),
         ),
       ],
       child: MaterialApp(

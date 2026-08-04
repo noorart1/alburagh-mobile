@@ -6,10 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
 import '../models/user.dart';
 import 'cart_provider.dart'; // Import CartProvider
+import 'wishlist_provider.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final CartProvider _cartProvider; // Add CartProvider dependency
+  final WishlistProvider _wishlistProvider;
 
   User? _user;
   bool _isLoggedIn = false;
@@ -30,8 +32,16 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   Map<String, dynamic>? get profile => _profile;
 
-  AuthProvider(this._cartProvider) {
-    _loadSavedAuth();
+  // Resolves once the saved-session restore below has finished (whether or
+  // not there was one to restore). Screens built eagerly at app start (e.g.
+  // ProfileScreen, sitting in MainScreen's IndexedStack) must await this
+  // before trusting isLoggedIn — otherwise they can read it before
+  // _loadSavedAuth() has had a chance to set it, and wrongly treat a logged
+  // in user as a guest right after the app is reopened.
+  late final Future<void> initialized;
+
+  AuthProvider(this._cartProvider, this._wishlistProvider) {
+    initialized = _loadSavedAuth();
   }
 
   Future<void> _loadSavedAuth() async {
@@ -50,6 +60,12 @@ class AuthProvider extends ChangeNotifier {
       // Not awaited: runs in the background while the user is on whatever
       // screen they land on first, so it's ready by the time they open theirs.
       ensureProfileLoaded();
+      // WishlistScreen only loads once, the first time it's built (it's kept
+      // alive in MainScreen's IndexedStack) — so if that already happened
+      // before this restore finished (e.g. it ran as a logged-out guest),
+      // it would otherwise keep showing an empty/stale list forever. Refresh
+      // it now that we know who's actually logged in.
+      _wishlistProvider.loadWishlist();
     }
   }
 
@@ -125,6 +141,9 @@ class AuthProvider extends ChangeNotifier {
       await _cartProvider.mergeCart(_cartProvider.items);
       // Not awaited — see _loadSavedAuth() for why.
       ensureProfileLoaded();
+      // Refresh with this account's wishlist — see _loadSavedAuth() for why
+      // WishlistScreen's own one-time load isn't enough on its own.
+      _wishlistProvider.loadWishlist();
       return true;
     } on DioException catch (e) {
       if (e.response?.statusCode == 403) {
@@ -303,6 +322,10 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     // Clear cart after logout
     await _cartProvider.clearCart();
+    // Drop the cached wishlist too (local only — see WishlistProvider.reset)
+    // so its bottom-bar badge doesn't keep showing the previous account's
+    // count while logged out.
+    _wishlistProvider.reset();
   }
 
   void clearError() {
