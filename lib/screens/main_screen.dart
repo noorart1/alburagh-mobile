@@ -11,12 +11,42 @@ import 'wishlist_screen.dart';
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
+  static const int profileTabIndex = 4;
+
+  /// Lets a screen nested in one tab (e.g. the cart, prompting a guest to
+  /// log in before checkout) switch the bottom nav to another tab instead of
+  /// pushing a screen on top of it. Set to a tab index to request a switch;
+  /// consumed and reset back to null by [_MainScreenState].
+  static final ValueNotifier<int?> requestedTabIndex = ValueNotifier<int?>(
+    null,
+  );
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    MainScreen.requestedTabIndex.addListener(_handleRequestedTab);
+  }
+
+  @override
+  void dispose() {
+    MainScreen.requestedTabIndex.removeListener(_handleRequestedTab);
+    super.dispose();
+  }
+
+  void _handleRequestedTab() {
+    final target = MainScreen.requestedTabIndex.value;
+    if (target == null) return;
+    MainScreen.requestedTabIndex.value = null;
+    setState(() => _currentIndex = target);
+    _navigatorKeys[target].currentState?.popUntil((route) => route.isFirst);
+  }
 
   final List<GlobalKey<NavigatorState>> _navigatorKeys = List.generate(
     5,

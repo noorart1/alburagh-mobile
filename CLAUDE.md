@@ -53,7 +53,7 @@ Each provider/screen constructs its own `ApiService()` inline — there's no sha
 
 ### Navigation
 
-No router package (no go_router/auto_route). `main.dart` boots straight into `MainScreen`, a 5-tab bottom nav (Home/Categories/Cart/Wishlist/Profile) where **each tab owns its own `Navigator`** (via `GlobalKey<NavigatorState>`) inside an `IndexedStack`, so each tab keeps an independent back-stack and its scroll/nav state survives tab switches. There is exactly one named route (`/cart`) registered at the `MaterialApp` level for deep-linking into the cart from outside the tab shell. `AuthWrapper` exists to gate `MainScreen` vs `LoginScreen` on auth state, but `main.dart` currently boots directly into `MainScreen` — auth gating happens deeper (e.g. in profile/checkout flows), and guest browsing is allowed throughout.
+No router package (no go_router/auto_route). `main.dart` boots straight into `MainScreen`, a 5-tab bottom nav (Home/Categories/Cart/Wishlist/Profile) where **each tab owns its own `Navigator`** (via `GlobalKey<NavigatorState>`) inside an `IndexedStack`, so each tab keeps an independent back-stack and its scroll/nav state survives tab switches. There is exactly one named route (`/cart`) registered at the `MaterialApp` level for deep-linking into the cart from outside the tab shell. There's no standalone login screen or auth-gating wrapper — `ProfileScreen` shows its own inline login/register form when logged out, and other flows that need auth (e.g. cart checkout) switch the bottom nav to the Profile tab via `MainScreen.requestedTabIndex` rather than pushing a login screen on top. Guest browsing is allowed throughout.
 
 ### Localization
 

@@ -7,7 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/cart_item_card.dart';
-import 'login_screen.dart';
+import 'main_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -67,8 +67,11 @@ class _CartScreenState extends State<CartScreen> {
   /// logged in there if they're logged in in the app — so checkout (address,
   /// shipping, COD/PayPal/card, all of it) happens through WooCommerce's own
   /// working checkout instead of being reimplemented in the app. Guests are
-  /// sent to the login screen first instead: the website checkout works fine
+  /// sent to the Profile tab first instead: the website checkout works fine
   /// for guests too, but this store wants every order tied to an account.
+  /// Switching tabs (rather than pushing a login screen on top of the cart)
+  /// keeps the cart visible underneath and reuses the login form Profile
+  /// already shows to logged-out users.
   Future<void> _goToWebsiteCart() async {
     final auth = context.read<AuthProvider>();
 
@@ -76,10 +79,7 @@ class _CartScreenState extends State<CartScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('يجب تسجيل الدخول لإتمام الشراء')),
       );
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+      MainScreen.requestedTabIndex.value = MainScreen.profileTabIndex;
       return;
     }
 

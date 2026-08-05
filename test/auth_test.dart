@@ -4,97 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:alburagh_app/providers/auth_provider.dart';
 import 'package:alburagh_app/providers/cart_provider.dart';
 import 'package:alburagh_app/providers/wishlist_provider.dart';
-import 'package:alburagh_app/screens/login_screen.dart';
 import 'package:alburagh_app/screens/register_screen.dart';
 
 void main() {
-  group('Login Screen Tests', () {
-    testWidgets('should display login form elements', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: MultiProvider(
-            providers: [
-              ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (_) => WishlistProvider()),
-              ChangeNotifierProvider(
-                create: (context) => AuthProvider(
-                  context.read<CartProvider>(),
-                  context.read<WishlistProvider>(),
-                ),
-              ),
-            ],
-            child: const LoginScreen(),
-          ),
-        ),
-      );
-
-      expect(find.text('دار البراق'), findsOneWidget);
-      expect(find.text('تسجيل الدخول إلى حسابك'), findsOneWidget);
-      expect(find.byIcon(Icons.shopping_bag), findsOneWidget);
-      expect(find.byType(TextField), findsNWidgets(2));
-      expect(find.text('تسجيل الدخول'), findsOneWidget);
-      expect(find.text('متابعة كزائر'), findsOneWidget);
-      expect(find.textContaining('ليس لديك حساب'), findsOneWidget);
-      expect(find.textContaining('أنشئ حساب'), findsOneWidget);
-    });
-
-    testWidgets('should show/hide password when toggle clicked', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: MultiProvider(
-            providers: [
-              ChangeNotifierProvider(create: (_) => CartProvider()),
-              ChangeNotifierProvider(create: (_) => WishlistProvider()),
-              ChangeNotifierProvider(
-                create: (context) => AuthProvider(
-                  context.read<CartProvider>(),
-                  context.read<WishlistProvider>(),
-                ),
-              ),
-            ],
-            child: const LoginScreen(),
-          ),
-        ),
-      );
-
-      final passwordField = find.byType(TextField).last;
-      final toggleButton = find.byIcon(Icons.visibility_off_outlined);
-
-      expect(toggleButton, findsOneWidget);
-
-      await tester.enterText(passwordField, 'testpassword');
-      await tester.tap(toggleButton);
-      await tester.pump();
-
-      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
-    });
-
-    testWidgets('should disable fields when loading', (
-      WidgetTester tester,
-    ) async {
-      final cartProvider = CartProvider();
-      final authProvider = AuthProvider(cartProvider, WishlistProvider());
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: MultiProvider(
-            providers: [
-              ChangeNotifierProvider.value(value: cartProvider),
-              ChangeNotifierProvider.value(value: authProvider),
-            ],
-            child: const LoginScreen(),
-          ),
-        ),
-      );
-
-      expect(find.byType(TextField), findsNWidgets(2));
-    });
-  });
-
   group('Register Screen Tests', () {
     testWidgets('should display register form elements', (
       WidgetTester tester,

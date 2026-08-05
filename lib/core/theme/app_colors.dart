@@ -13,7 +13,7 @@ class AppColors {
   static const Color accentRed = Color(0xFFEF3838);
   static const Color accentCyan = Color(0xFF0E8EA8);
 
-  static const Color background = Color(0xFFFBFAF7);
+  static const Color background = Color(0xFFF9C900);
   static const Color textPrimary = Color(0xFF30283B);
   static const Color textMuted = Color(0xFF746D7D);
   static const Color border = Color(0xFFE9E3EE);
