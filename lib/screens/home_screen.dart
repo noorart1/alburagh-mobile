@@ -12,7 +12,6 @@ import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
-import '../providers/recently_viewed_provider.dart';
 import '../widgets/product_card.dart';
 import 'category_screen.dart';
 import 'product_detail_screen.dart';
@@ -28,9 +27,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _api = ApiService();
-  List<Product> featuredProducts = [];
-  List<Product> newArrivals = [];
-  List<Product> bestSellers = [];
+  List<Product> intellectualGamesProducts = [];
+  Category? intellectualGamesCategory;
+  List<Product> collectionsProducts = [];
+  Category? collectionsCategory;
+  List<Product> featuredBooksProducts = [];
+  Category? featuredBooksCategory;
+  List<Product> educationalBooksProducts = [];
+  Category? educationalBooksCategory;
   List<Category> categories = [];
   bool isLoading = true;
   int _currentBannerIndex = 0;
@@ -59,36 +63,118 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onCurrencyChanged() => loadData();
 
+  Category? _findCategoryBy(List<Category> categories, List<String> matches) {
+    final candidates = matches.map((m) => m.toLowerCase()).toSet();
+    for (final cat in categories) {
+      if (candidates.contains(cat.slug?.toLowerCase()) ||
+          candidates.contains(cat.name.toLowerCase())) {
+        return cat;
+      }
+    }
+    return null;
+  }
+
   Future<void> loadData() async {
     try {
       final currency = _currencyProvider.currency;
-      final featuredData = await _api.getFeaturedProducts(currency: currency);
-      final newArrivalsData = await _api.getNewArrivals(currency: currency);
       final catData = await _api.getCategories();
 
       if (!mounted) return;
       setState(() {
-        featuredProducts = featuredData
-            .map((p) => Product.fromJson(p))
-            .toList();
-        newArrivals = newArrivalsData.map((p) => Product.fromJson(p)).toList();
         categories = catData.map((c) => Category.fromJson(c)).toList();
+        collectionsCategory = _findCategoryBy(categories, ['collections']);
+        featuredBooksCategory = _findCategoryBy(categories, [
+          'الكتب المصورة',
+          'picture-books',
+        ]);
+        educationalBooksCategory = _findCategoryBy(categories, [
+          'الكتب التعليمية',
+          'educational',
+        ]);
+        intellectualGamesCategory = _findCategoryBy(categories, [
+          'الألعاب التعليمية',
+          'intellectual-game',
+        ]);
         isLoading = false;
       });
 
-      // Loaded separately, after the rest of the home screen is already
-      // showing: it's a secondary section, and a slow/failed best-sellers
-      // request shouldn't hold up or break the sections above it.
+      // Same treatment as the other category rows below: secondary section,
+      // loaded after the category list resolves which category id this is.
       try {
-        final bestSellersData = await _api.getBestSellers(currency: currency);
-        if (!mounted) return;
-        setState(() {
-          bestSellers = bestSellersData
-              .map((p) => Product.fromJson(p))
-              .toList();
-        });
+        final educationalBooksCat = educationalBooksCategory;
+        if (educationalBooksCat != null) {
+          final educationalBooksData = await _api.getProducts(
+            category:
+                educationalBooksCat.slug ?? educationalBooksCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            educationalBooksProducts = educationalBooksData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
       } catch (_) {
-        // Leave bestSellers as-is; _buildSection hides itself when empty.
+        // Leave educationalBooksProducts as-is; _buildSection hides itself when empty.
+      }
+      try {
+        final intellectualGamesCat = intellectualGamesCategory;
+        if (intellectualGamesCat != null) {
+          final intellectualGamesData = await _api.getProducts(
+            category:
+                intellectualGamesCat.slug ??
+                intellectualGamesCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            intellectualGamesProducts = intellectualGamesData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave intellectualGamesProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as best-sellers above: secondary section, loaded
+      // after the category list resolves which category id is "Collections".
+      try {
+        final collectionsCat = collectionsCategory;
+        if (collectionsCat != null) {
+          final collectionsData = await _api.getProducts(
+            category: collectionsCat.slug ?? collectionsCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            collectionsProducts = collectionsData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave collectionsProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment: the row should show this category's own products,
+      // matching what its title and "more" button both point to, rather
+      // than the unrelated featured-products list.
+      try {
+        final featuredBooksCat = featuredBooksCategory;
+        if (featuredBooksCat != null) {
+          final featuredBooksData = await _api.getProducts(
+            category: featuredBooksCat.slug ?? featuredBooksCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            featuredBooksProducts = featuredBooksData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave featuredBooksProducts as-is; _buildSection hides itself when empty.
       }
       // Load cart data after loading products. Do not let a cart failure
       // block the already-loaded home content.
@@ -105,8 +191,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final recentlyViewed = context.watch<RecentlyViewedProvider>().items;
-
     return Scaffold(
       body: SafeArea(
         child: isLoading
@@ -117,24 +201,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                        child: Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: const Text(
-                            'AlBuragh',
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
+                      child: Container(
+                        color: const Color(0xFF6A1B9A),
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                16,
+                                16,
+                                12,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  CachedNetworkImage(
+                                    imageUrl:
+                                        'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
+                                    height: 40,
+                                    fit: BoxFit.contain,
+                                  ),
+                                  const _CurrencySwitcher(),
+                                ],
+                              ),
                             ),
-                          ),
+                            _HomeSearchBar(),
+                          ],
                         ),
                       ),
-                    ),
-                    SliverPersistentHeader(
-                      pinned: true,
-                      delegate: _SearchBarDelegate(child: _HomeSearchBar()),
                     ),
                     SliverToBoxAdapter(
                       child: Column(
@@ -304,29 +399,45 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           _buildSection(
-                            title: 'شوهد مؤخراً',
-                            products: recentlyViewed,
+                            title: 'السلاسل القصصية',
+                            products: collectionsProducts,
+                            seeMoreBuilder: collectionsCategory != null
+                                ? (context) => CategoryScreen(
+                                    category: collectionsCategory,
+                                  )
+                                : null,
                           ),
                           _buildSection(
-                            title: 'كتب وسلاسل مميزة',
-                            products: featuredProducts,
-                            // "More" here browses the whole catalog rather than
-                            // the other featured picks (which don't really have
-                            // "more" beyond the handful already shown). No
-                            // category filter at all -- not a magic "all
-                            // books" category slug, which requires every
-                            // product to be manually tagged into it and
-                            // silently undercounts whenever that's missed.
-                            seeMoreBuilder: (context) =>
-                                const CategoryScreen(title: 'كل الكتب'),
+                            title: 'الكتب المصورة',
+                            products: featuredBooksProducts,
+                            // Prefer the matching "الكتب المصورة" category so
+                            // "more" browses that category specifically;
+                            // only fall back to the whole catalog if no such
+                            // category exists on the backend.
+                            seeMoreBuilder: featuredBooksCategory != null
+                                ? (context) => CategoryScreen(
+                                    category: featuredBooksCategory,
+                                  )
+                                : (context) =>
+                                    const CategoryScreen(title: 'كل الكتب'),
                           ),
                           _buildSection(
-                            title: 'الأكثر مبيعاً',
-                            products: bestSellers,
+                            title: 'الكتب التعليمية',
+                            products: educationalBooksProducts,
+                            seeMoreBuilder: educationalBooksCategory != null
+                                ? (context) => CategoryScreen(
+                                    category: educationalBooksCategory,
+                                  )
+                                : null,
                           ),
                           _buildSection(
-                            title: 'وصل حديثاً',
-                            products: newArrivals,
+                            title: 'الألعاب التعليمية',
+                            products: intellectualGamesProducts,
+                            seeMoreBuilder: intellectualGamesCategory != null
+                                ? (context) => CategoryScreen(
+                                    category: intellectualGamesCategory,
+                                  )
+                                : null,
                           ),
                           const SizedBox(height: 16),
                         ],
@@ -360,8 +471,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        SizedBox(
+        Container(
           height: 290,
+          color: const Color(0xFFF9C900),
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -406,13 +518,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Keeps the search bar pinned at the top of the scroll view (below the
-/// logo, which scrolls away normally) instead of scrolling off along with
-/// the rest of the home screen content.
-/// The pinned search field itself: as-you-type suggestions in a floating
+/// The home screen's search field: as-you-type suggestions in a floating
 /// dropdown (via CompositedTransformTarget/Follower + an Overlay, so it
-/// draws above the rest of the scroll content regardless of where the
-/// pinned header currently sits), separate from the full results grid on
+/// draws above the rest of the scroll content regardless of where this
+/// widget currently sits), separate from the full results grid on
 /// SearchScreen. Tapping a suggestion jumps straight to that product;
 /// submitting (or the "see all" row) opens the full results grid.
 class _HomeSearchBar extends StatefulWidget {
@@ -693,34 +802,69 @@ class _SuggestionsPanel extends StatelessWidget {
   }
 }
 
-class _SearchBarDelegate extends SliverPersistentHeaderDelegate {
-  final Widget child;
-
-  const _SearchBarDelegate({required this.child});
-
-  static const double _height = 72;
+class _CurrencySwitcher extends StatelessWidget {
+  const _CurrencySwitcher();
 
   @override
-  double get minExtent => _height;
-
-  @override
-  double get maxExtent => _height;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return ColoredBox(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: SizedBox(height: _height, child: child),
+  Widget build(BuildContext context) {
+    final currency = context.watch<CurrencyProvider>().currency;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: AppRadius.mdRadius,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _CurrencyOption(
+            label: 'USD',
+            selected: currency == 'USD',
+            onTap: () => context.read<CurrencyProvider>().setCurrency('USD'),
+          ),
+          _CurrencyOption(
+            label: 'IQD',
+            selected: currency == 'IQD',
+            onTap: () => context.read<CurrencyProvider>().setCurrency('IQD'),
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _CurrencyOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CurrencyOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
-  bool shouldRebuild(covariant _SearchBarDelegate oldDelegate) {
-    return child != oldDelegate.child;
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.mdRadius,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.transparent,
+          borderRadius: AppRadius.mdRadius,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: selected ? Colors.white : AppColors.textMuted,
+          ),
+        ),
+      ),
+    );
   }
 }
 

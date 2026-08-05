@@ -2,18 +2,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
 import '../core/currency_utils.dart';
-import '../core/order_status.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user.dart';
 import '../providers/cart_provider.dart';
-import '../providers/currency_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
-import 'order_detail_screen.dart';
+import 'pdf_viewer_screen.dart';
 import 'register_screen.dart';
 import 'wishlist_screen.dart';
 
@@ -281,7 +280,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  void _showComingSoon(String title) {
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !await canLaunchUrl(uri)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تعذر فتح الرابط')));
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _openCatalog(String title, String url) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PdfViewerScreen(title: title, url: url),
+      ),
+    );
+  }
+
+  void _showCatalogOptions() {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -292,20 +312,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              title,
+              'الكتالوج',
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text('هذا القسم جاهز للربط بخدمة الحساب والطلبات.'),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('حسنا'),
-              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('دليل الاصدارات بسعر الدولار'),
+              onTap: () {
+                Navigator.pop(context);
+                _openCatalog(
+                  'دليل الاصدارات بسعر الدولار',
+                  'https://alburagh.com/wp-content/uploads/2026/02/alburagh26-.pdf',
+                );
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('دليل الاصدارات بسعر الدرهم الإماراتي'),
+              onTap: () {
+                Navigator.pop(context);
+                _openCatalog(
+                  'دليل الاصدارات بسعر الدرهم الإماراتي',
+                  'https://alburagh.com/wp-content/uploads/2026/02/alburagh26-UAE.pdf',
+                );
+              },
             ),
           ],
         ),
@@ -333,18 +368,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String get _initial {
     final name = _displayName.trim();
     return name.isNotEmpty ? name.characters.first : 'م';
-  }
-
-  String get _fullAddressSummary {
-    final parts = [
-      _address1Controller.text.trim(),
-      _address2Controller.text.trim(),
-      _cityController.text.trim(),
-      _stateController.text.trim(),
-      _postcodeController.text.trim(),
-      _countryController.text.trim(),
-    ].where((e) => e.isNotEmpty).toList();
-    return parts.isEmpty ? 'لا يوجد عنوان محفوظ بعد' : parts.join(', ');
   }
 
   @override
@@ -459,6 +482,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.mail_outline,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
+                      enabled: false,
                       validator: (v) {
                         final email = v?.trim() ?? '';
                         if (email.isEmpty) return null;
@@ -552,135 +576,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: 'الحساب',
             children: [
               _ProfileTile(
-                icon: Icons.receipt_long,
-                title: 'طلباتي',
-                subtitle: 'متابعة الطلبات وحالة الشحن',
-                onTap: () async {
-                  final token = context.read<AuthProvider>().user?.token;
-                  if (token == null || token.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
-                    );
-                    return;
-                  }
-                  final orders = await _api.getOrders(token);
-                  if (!mounted) return;
-                  showModalBottomSheet<void>(
-                    context: context,
-                    builder: (context) => Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'طلباتي',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (orders.isEmpty)
-                            const Text('لا توجد طلبات بعد.')
-                          else
-                            SizedBox(
-                              height: 280,
-                              child: ListView.builder(
-                                itemCount: orders.length,
-                                itemBuilder: (context, index) {
-                                  final order =
-                                      orders[index] as Map<String, dynamic>;
-                                  final orderId = order['id'] as int;
-                                  final status =
-                                      order['status']?.toString() ?? '';
-                                  final symbol = CurrencyUtils.symbolForCode(
-                                    order['currency']?.toString() ?? 'USD',
-                                  );
-                                  return ListTile(
-                                    title: Text('الطلب #$orderId'),
-                                    subtitle: Text(
-                                      orderStatusLabel(status),
-                                      style: TextStyle(
-                                        color: orderStatusColor(status),
-                                      ),
-                                    ),
-                                    trailing: Text(
-                                      CurrencyUtils.format(
-                                        (order['total'] as num?)
-                                                ?.toDouble() ??
-                                            0,
-                                        symbol,
-                                      ),
-                                    ),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              OrderDetailScreen(
-                                                orderId: orderId,
-                                              ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              _ProfileTile(
-                icon: Icons.location_on_outlined,
-                title: 'عناوين الشحن',
-                subtitle: _fullAddressSummary,
-                onTap: () async {
-                  final token = context.read<AuthProvider>().user?.token;
-                  if (token == null || token.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
-                    );
-                    return;
-                  }
-                  try {
-                    final addresses = await _api.getAddresses(token);
-                    if (!mounted) return;
-                    final primary = addresses.isNotEmpty
-                        ? addresses.first
-                        : null;
-                    if (primary != null) {
-                      setState(() {
-                        _firstNameController.text = primary.firstName;
-                        _lastNameController.text = primary.lastName;
-                        _phoneController.text = primary.phone;
-                        _address1Controller.text = primary.address1;
-                        _address2Controller.text = primary.address2;
-                        _cityController.text = primary.city;
-                        _stateController.text = primary.state;
-                        _postcodeController.text = primary.postcode;
-                        _countryController.text = primary.country;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم تحميل العنوان')),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('لا يوجد عنوان محفوظ')),
-                      );
-                    }
-                  } catch (_) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('فشل تحميل العناوين')),
-                    );
-                  }
-                },
-              ),
-              _ProfileTile(
                 icon: Icons.favorite_border,
                 title: 'المفضلة',
                 subtitle: 'المنتجات التي أعجبتك',
@@ -697,40 +592,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           _ProfileSection(
-            title: 'العملة',
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'USD', label: Text('USD (\$)')),
-                    ButtonSegment(value: 'IQD', label: Text('IQD (د.ع)')),
-                  ],
-                  selected: {context.watch<CurrencyProvider>().currency},
-                  onSelectionChanged: (selection) {
-                    context.read<CurrencyProvider>().setCurrency(
-                      selection.first,
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _ProfileSection(
             title: 'الدعم',
             children: [
               _ProfileTile(
                 icon: Icons.support_agent,
-                title: 'التواصل مع الدعم',
-                subtitle: 'المساعدة في الشراء ومتابعة الطلبات',
-                onTap: () => _showComingSoon('التواصل مع الدعم'),
+                title: 'اتصل بنا',
+                subtitle: 'تواصل معنا للمساعدة والاستفسارات',
+                onTap: () => _openUrl('https://alburagh.com/contact-us/'),
               ),
               _ProfileTile(
                 icon: Icons.info_outline,
-                title: 'عن دار البراق',
-                subtitle: 'متجر للكتب والمنتجات الثقافية',
-                onTap: () => _showComingSoon('عن دار البراق'),
+                title: 'من نحن',
+                subtitle: 'تعرف على دار البراق',
+                onTap: () => _openUrl('https://alburagh.com/about/'),
+              ),
+              _ProfileTile(
+                icon: Icons.menu_book_outlined,
+                title: 'الكتالوج',
+                subtitle: 'دليل الإصدارات بصيغة PDF',
+                onTap: _showCatalogOptions,
               ),
             ],
           ),
@@ -1164,6 +1044,7 @@ class _ProfileTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final int maxLines;
   final String? Function(String?)? validator;
+  final bool enabled;
 
   const _ProfileTextField({
     required this.controller,
@@ -1172,6 +1053,7 @@ class _ProfileTextField extends StatelessWidget {
     this.keyboardType,
     this.textInputAction,
     this.validator,
+    this.enabled = true,
   }) : maxLines = 1;
 
   @override
@@ -1182,6 +1064,7 @@ class _ProfileTextField extends StatelessWidget {
       textInputAction: textInputAction,
       maxLines: maxLines,
       validator: validator,
+      enabled: enabled,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),

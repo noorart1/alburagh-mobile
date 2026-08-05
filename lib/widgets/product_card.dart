@@ -22,6 +22,7 @@ class ProductCard extends StatelessWidget {
     final hasDiscount = regularPrice > price;
 
     return Card(
+      color: AppColors.white,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
@@ -43,7 +44,7 @@ class ProductCard extends StatelessWidget {
                     child: Hero(
                       tag: 'product_${product.id}',
                       child: Container(
-                        color: AppColors.surfaceSoft,
+                        color: AppColors.white,
                         child: product.imageUrl.isEmpty
                             ? Icon(
                                 Icons.image_not_supported,

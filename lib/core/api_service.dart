@@ -85,7 +85,7 @@ class ApiService {
     final Map<String, dynamic> queryParams = {
       'page': page,
       'per_page': perPage,
-      if (currency != null) 'currency': currency,
+      'currency': ?currency,
     };
     if (category != null && category.isNotEmpty) {
       queryParams['category'] = int.tryParse(category) ?? category;
@@ -97,7 +97,7 @@ class ApiService {
   Future<List<dynamic>> getFeaturedProducts({String? currency}) async {
     final response = await _dio.get(
       'featured-products',
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
@@ -105,7 +105,7 @@ class ApiService {
   Future<List<dynamic>> getNewArrivals({String? currency}) async {
     final response = await _dio.get(
       'new-arrivals',
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
@@ -113,7 +113,7 @@ class ApiService {
   Future<List<dynamic>> getSaleProducts({String? currency}) async {
     final response = await _dio.get(
       'sale-products',
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
@@ -121,7 +121,7 @@ class ApiService {
   Future<List<dynamic>> getBestSellers({String? currency}) async {
     final response = await _dio.get(
       'best-sellers',
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
@@ -135,16 +135,33 @@ class ApiService {
       'search',
       queryParameters: {
         'q': query,
-        if (currency != null) 'currency': currency,
+        'currency': ?currency,
         if (category != null && category.isNotEmpty) 'category': category,
       },
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
+  // "uncategorized"/"غير مصنف" is WooCommerce's default catch-all category,
+  // not a real merchandising category. The rest are hidden from the app for
+  // now too. Matched by slug where the site gives one; "بطاقات اشتراك تطبيق
+  // البراق" only has a percent-encoded Arabic slug, so it's matched by name
+  // instead.
+  static const _hiddenCategorySlugs = {'uncategorized', 'english-books', 'pdf'};
+  static const _hiddenCategoryNames = {'بطاقات اشتراك تطبيق البراق'};
+
   Future<List<dynamic>> getCategories() async {
     final response = await _dio.get('categories');
-    return response.data is List ? List.from(response.data) : <dynamic>[];
+    final categories = response.data is List
+        ? List<dynamic>.from(response.data)
+        : <dynamic>[];
+    return categories.where((c) {
+      final map = c as Map;
+      final slug = map['slug']?.toString().toLowerCase();
+      final name = map['name']?.toString();
+      return !_hiddenCategorySlugs.contains(slug) &&
+          !_hiddenCategoryNames.contains(name);
+    }).toList();
   }
 
   Future<Map<String, dynamic>> registerCustomer({
@@ -257,7 +274,7 @@ class ApiService {
     try {
       final response = await _dio.get(
         'cart',
-        queryParameters: {if (currency != null) 'currency': currency},
+        queryParameters: {'currency': ?currency},
         options: await _authOptions(),
       );
       return response.data is Map
@@ -282,7 +299,7 @@ class ApiService {
     final response = await _dio.post(
       'cart',
       data: {'product_id': productId, 'quantity': quantity},
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -298,7 +315,7 @@ class ApiService {
     final response = await _dio.put(
       'cart',
       data: {'cart_item_key': cartItemKey, 'quantity': quantity},
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -309,7 +326,7 @@ class ApiService {
   Future<Map<String, dynamic>> clearCart({String? currency}) async {
     final response = await _dio.delete(
       'cart',
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -321,7 +338,7 @@ class ApiService {
     try {
       final response = await _dio.get(
         'wishlist',
-        queryParameters: {if (currency != null) 'currency': currency},
+        queryParameters: {'currency': ?currency},
         options: await _authOptions(),
       );
       return response.data is Map
@@ -342,7 +359,7 @@ class ApiService {
     final response = await _dio.post(
       'wishlist',
       data: {'product_id': productId},
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
       options: await _authOptions(),
     );
     return response.data is Map
@@ -357,7 +374,7 @@ class ApiService {
     final response = await _dio.delete(
       'wishlist',
       data: {'product_id': productId},
-      queryParameters: {if (currency != null) 'currency': currency},
+      queryParameters: {'currency': ?currency},
       options: await _authOptions(),
     );
     return response.data is Map
