@@ -5,7 +5,7 @@ class AppRadius {
 
   static const double sm = 8;
   static const double md = 16;
-  static const double lg = 24;
+  static const double lg = 10;//24
 
   static BorderRadius get smRadius => BorderRadius.circular(sm);
   static BorderRadius get mdRadius => BorderRadius.circular(md);

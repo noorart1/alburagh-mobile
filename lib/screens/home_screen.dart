@@ -207,10 +207,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             Padding(
                               padding: const EdgeInsets.fromLTRB(
-                                16,
-                                16,
-                                16,
-                                12,
+                                2,
+                                2,
+                                2,
+                                2,
                               ),
                               child: Row(
                                 mainAxisAlignment:
@@ -504,9 +504,9 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 0),//4
                 child: SizedBox(
-                  width: 160,
+                  width: 170,
                   child: ProductCard(product: products[index]),
                 ),
               );
