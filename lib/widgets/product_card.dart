@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
-import '../core/theme/app_spacing.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/wishlist_provider.dart';
@@ -36,8 +35,14 @@ class ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // No flex ratio here on purpose: the details Padding below
+            // sizes itself to exactly what its content needs (name +
+            // optional discount + button row), and the image takes 100%
+            // of whatever's left. That's strictly more image space than
+            // any fixed flex split could give it, on every card size/
+            // aspect ratio, with no risk of re-introducing the overflow a
+            // fixed ratio caused before.
             Expanded(
-              flex: 5,
               child: Stack(
                 children: [
                   Positioned.fill(
@@ -83,11 +88,6 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: _WishlistButton(product: product),
-                  ),
                   if (!product.inStock)
                     Positioned(
                       top: 6,
@@ -113,55 +113,43 @@ class ProductCard extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              flex: 5,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (product.category.isNotEmpty)
-                      Text(
-                        product.category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    const SizedBox(height: AppSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      height: 1.2,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (hasDiscount)
                     Text(
-                      product.name,
-                      maxLines: 2,
+                      CurrencyUtils.formatString(
+                        product.regularPrice,
+                        product.currencySymbol,
+                      ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        height: 1.2,
-                        color: AppColors.textPrimary,
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                        decoration: TextDecoration.lineThrough,
                       ),
                     ),
-                    const Spacer(),
-                    if (hasDiscount)
-                      Text(
-                        CurrencyUtils.formatString(
-                          product.regularPrice,
-                          product.currencySymbol,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textMuted,
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                      ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
                           CurrencyUtils.formatString(
                             product.price,
                             product.currencySymbol,
@@ -174,11 +162,13 @@ class ProductCard extends StatelessWidget {
                             color: AppColors.primary,
                           ),
                         ),
-                        _CartButton(product: product),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                      _WishlistButton(product: product),
+                      const SizedBox(width: 6),
+                      _CartButton(product: product),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -213,12 +203,17 @@ class _WishlistButton extends StatelessWidget {
           ),
         );
       },
-      child: CircleAvatar(
-        radius: 15,
-        backgroundColor: AppColors.white.withValues(alpha: 0.9),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.surfaceSoft,
+          border: Border.all(color: AppColors.border),
+        ),
         child: Icon(
           isWishlisted ? Icons.favorite : Icons.favorite_border,
-          size: 16,
+          size: 14,
           color: isWishlisted ? AppColors.accentRed : AppColors.textMuted,
         ),
       ),
@@ -238,8 +233,8 @@ class _CartButton extends StatelessWidget {
     final disabled = !isExternal && !product.inStock;
 
     return SizedBox(
-      width: 32,
-      height: 32,
+      width: 28,
+      height: 28,
       child: FilledButton(
         onPressed: disabled
             ? null

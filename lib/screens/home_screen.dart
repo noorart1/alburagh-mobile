@@ -36,6 +36,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Category? featuredBooksCategory;
   List<Product> educationalBooksProducts = [];
   Category? educationalBooksCategory;
+  List<Product> religiousProducts = [];
+  Category? religiousCategory;
+  List<Product> heritageBooksProducts = [];
+  Category? heritageBooksCategory;
+  List<Product> skillsDevelopmentProducts = [];
+  Category? skillsDevelopmentCategory;
   List<Category> categories = [];
   bool isLoading = true;
 
@@ -88,6 +94,28 @@ class _HomeScreenState extends State<HomeScreen> {
         intellectualGamesCategory = _findCategoryBy(categories, [
           'الألعاب التعليمية',
           'intellectual-game',
+        ]);
+        religiousCategory = _findCategoryBy(categories, [
+          'دينية',
+          'كتب دينية',
+          'الكتب الدينية',
+          'religious',
+          'religious-books',
+        ]);
+        heritageBooksCategory = _findCategoryBy(categories, [
+          'تراثية',
+          'كتب تراثية',
+          'الكتب التراثية',
+          'التراث',
+          'heritage',
+          'heritage-books',
+        ]);
+        skillsDevelopmentCategory = _findCategoryBy(categories, [
+          'مهارات',
+          'تنمية المهارات',
+          'تنمية مهارات',
+          'skills',
+          'skills-development',
         ]);
         isLoading = false;
       });
@@ -168,6 +196,61 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       } catch (_) {
         // Leave featuredBooksProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as the other secondary sections above.
+      try {
+        final religiousCat = religiousCategory;
+        if (religiousCat != null) {
+          final religiousData = await _api.getProducts(
+            category: religiousCat.slug ?? religiousCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            religiousProducts = religiousData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave religiousProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as the other secondary sections above.
+      try {
+        final heritageBooksCat = heritageBooksCategory;
+        if (heritageBooksCat != null) {
+          final heritageBooksData = await _api.getProducts(
+            category: heritageBooksCat.slug ?? heritageBooksCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            heritageBooksProducts = heritageBooksData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave heritageBooksProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as the other secondary sections above.
+      try {
+        final skillsDevelopmentCat = skillsDevelopmentCategory;
+        if (skillsDevelopmentCat != null) {
+          final skillsDevelopmentData = await _api.getProducts(
+            category:
+                skillsDevelopmentCat.slug ?? skillsDevelopmentCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            skillsDevelopmentProducts = skillsDevelopmentData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave skillsDevelopmentProducts as-is; _buildSection hides itself when empty.
       }
       // Load cart data after loading products. Do not let a cart failure
       // block the already-loaded home content.
@@ -264,7 +347,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             SizedBox(
-                              height: 146,
+                              // Was 146 -- too tight for the circle (60 +
+                              // its border padding) plus a 2-line category
+                              // name plus the product-count line below it,
+                              // which overflowed the Column by ~13px.
+                              height: 162,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
                                 padding: const EdgeInsets.symmetric(
@@ -401,6 +488,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                     )
                                   : null,
                             ),
+                            _buildSection(
+                              title: 'الكتب الدينية',
+                              products: religiousProducts,
+                              seeMoreBuilder: religiousCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: religiousCategory,
+                                    )
+                                  : null,
+                            ),
+                            _buildSection(
+                              title: 'الكتب التراثية',
+                              products: heritageBooksProducts,
+                              seeMoreBuilder: heritageBooksCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: heritageBooksCategory,
+                                    )
+                                  : null,
+                            ),
+                            _buildSection(
+                              title: 'تنمية المهارات',
+                              products: skillsDevelopmentProducts,
+                              seeMoreBuilder: skillsDevelopmentCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: skillsDevelopmentCategory,
+                                    )
+                                  : null,
+                            ),
                             const SizedBox(height: 16),
                           ],
                         ),
@@ -425,13 +539,46 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
+          // Row's child order is direction-aware: under the app's RTL
+          // Directionality the title (first child) renders on the right
+          // and the "see more" link (last child) renders on the left --
+          // no manual textDirection juggling needed.
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          seeMoreBuilder ??
+                          (context) => ProductListScreen(
+                            title: title,
+                            products: products,
+                          ),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'المزيد>',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         Container(
@@ -440,32 +587,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: products.length + 1,
+            itemCount: products.length,
             itemBuilder: (context, index) {
-              if (index == products.length) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: SizedBox(
-                    width: 110,
-                    child: _MoreCard(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                seeMoreBuilder ??
-                                (context) => ProductListScreen(
-                                  title: title,
-                                  products: products,
-                                ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                );
-              }
-
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 0), //4
                 child: SizedBox(
@@ -977,42 +1100,6 @@ class _CurrencyOption extends StatelessWidget {
             fontSize: 12,
             fontWeight: FontWeight.bold,
             color: selected ? Colors.white : AppColors.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MoreCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _MoreCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: AppColors.surfaceSoft,
-                child: Icon(Icons.arrow_back, color: AppColors.primary),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'المزيد',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
           ),
         ),
       ),

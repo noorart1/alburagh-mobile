@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/wishlist_provider.dart';
 import 'home_screen.dart';
-import 'all_categories_screen.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
 import 'wishlist_screen.dart';
@@ -12,7 +11,8 @@ import 'wishlist_screen.dart';
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
-  static const int profileTabIndex = 4;
+  // Was 4 -- shifted down by one now that the "الأقسام" tab is hidden below.
+  static const int profileTabIndex = 3;
 
   /// Lets a screen nested in one tab (e.g. the cart, prompting a guest to
   /// log in before checkout) switch the bottom nav to another tab instead of
@@ -49,14 +49,19 @@ class _MainScreenState extends State<MainScreen> {
     _navigatorKeys[target].currentState?.popUntil((route) => route.isFirst);
   }
 
+  // Was 5 -- the "الأقسام" tab is temporarily hidden below (root widget,
+  // nav bar item, and one navigator key removed together). To restore it:
+  // add AllCategoriesScreen() back to _tabRoots and its
+  // BottomNavigationBarItem back to _buildItems (both in the same
+  // position they were removed from), bump this back to 5, and move
+  // profileTabIndex back to 4.
   final List<GlobalKey<NavigatorState>> _navigatorKeys = List.generate(
-    5,
+    4,
     (_) => GlobalKey<NavigatorState>(),
   );
 
   final List<Widget> _tabRoots = const [
     HomeScreen(),
-    AllCategoriesScreen(),
     CartScreen(),
     WishlistScreen(),
     ProfileScreen(),
@@ -67,10 +72,6 @@ class _MainScreenState extends State<MainScreen> {
       const BottomNavigationBarItem(
         icon: Icon(Icons.home),
         label: 'الرئيسية',
-      ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.category),
-        label: 'الأقسام',
       ),
       BottomNavigationBarItem(
         icon: _badgedIcon(Icons.shopping_cart, cartCount),
@@ -143,6 +144,7 @@ class _MainScreenState extends State<MainScreen> {
           }),
         ),
         bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: Colors.grey.shade300,
           currentIndex: _currentIndex,
           onTap: _onTabTapped,
           items: _buildItems(cartCount, wishlistCount),
