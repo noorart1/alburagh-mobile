@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../core/api_service.dart';
 import '../core/theme/app_colors.dart';
@@ -148,12 +149,18 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(24),
                   ),
-                  child: Image.network(
-                    category.imageUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: category.imageUrl,
                     height: 100,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
+                    // Image.network has no disk cache at all -- every time
+                    // this grid was rebuilt (including a pull-to-refresh),
+                    // every category icon was re-downloaded from scratch.
+                    memCacheHeight:
+                        (MediaQuery.of(context).devicePixelRatio * 100)
+                            .round(),
+                    errorWidget: (context, url, error) {
                       return Container(
                         height: 100,
                         color: AppColors.surfaceSoft,

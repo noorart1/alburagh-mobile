@@ -55,6 +55,16 @@ class ProductCard extends StatelessWidget {
                                 imageUrl: product.imageUrl,
                                 fit: BoxFit.contain,
                                 alignment: Alignment.center,
+                                // Grid cards display this at ~170 logical px
+                                // wide; without a cache size, the plugin
+                                // decodes the full source resolution (often
+                                // several times larger) into memory for
+                                // every card, which is the dominant RAM
+                                // cost in a long product grid.
+                                memCacheWidth:
+                                    (MediaQuery.of(context).devicePixelRatio *
+                                            220)
+                                        .round(),
                                 placeholder: (context, url) => const Center(
                                   child: SizedBox(
                                     width: 24,

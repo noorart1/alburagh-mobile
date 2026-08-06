@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
@@ -37,13 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Category? educationalBooksCategory;
   List<Category> categories = [];
   bool isLoading = true;
-  int _currentBannerIndex = 0;
-
-  static const List<String> _bannerImageUrls = [
-    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh2.webp',
-    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh3.webp',
-    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh1.webp',
-  ];
 
   late final CurrencyProvider _currencyProvider;
 
@@ -123,8 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (intellectualGamesCat != null) {
           final intellectualGamesData = await _api.getProducts(
             category:
-                intellectualGamesCat.slug ??
-                intellectualGamesCat.id.toString(),
+                intellectualGamesCat.slug ?? intellectualGamesCat.id.toString(),
             currency: currency,
           );
           if (!mounted) return;
@@ -191,10 +184,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // The header now paints purple all the way to the very top of the
+      // screen, behind the status bar, instead of stopping below it --
+      // so the status bar icons need to switch to light/white to stay
+      // visible against that dark background.
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        body: isLoading
+            ? const SafeArea(child: Center(child: CircularProgressIndicator()))
             : RefreshIndicator(
                 onRefresh: loadData,
                 child: CustomScrollView(
@@ -203,244 +201,209 @@ class _HomeScreenState extends State<HomeScreen> {
                     SliverToBoxAdapter(
                       child: Container(
                         color: const Color(0xFF6A1B9A),
+                        // Single source of truth for the header's left/right
+                        // margin -- the logo row and the search bar below
+                        // both sit inside this same padding, so their edges
+                        // line up on one consistent grid instead of each
+                        // widget carrying its own, slightly different inset.
+                        // The top inset adds the status bar's own height on
+                        // top of the normal 12px breathing room, since this
+                        // Container is no longer inside a SafeArea and its
+                        // purple background now extends behind the status
+                        // bar -- without this, the logo/currency row itself
+                        // would be the thing sitting behind the icons.
+                        padding: EdgeInsets.fromLTRB(
+                          18,
+                          MediaQuery.of(context).padding.top + 12,
+                          18,
+                          14,
+                        ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                2,
-                                2,
-                                2,
-                                2,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  CachedNetworkImage(
-                                    imageUrl:
-                                        'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
-                                    height: 40,
-                                    fit: BoxFit.contain,
-                                  ),
-                                  const _CurrencySwitcher(),
-                                ],
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                CachedNetworkImage(
+                                  imageUrl:
+                                      'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
+                                  height: 32,
+                                  fit: BoxFit.contain,
+                                ),
+                                const _CurrencySwitcher(),
+                              ],
                             ),
-                            _HomeSearchBar(),
+                            const SizedBox(height: 14),
+                            const _HomeSearchBar(),
                           ],
                         ),
                       ),
                     ),
-                    SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: 16),
-                          CarouselSlider.builder(
-                            itemCount: _bannerImageUrls.length,
-                            options: CarouselOptions(
-                              // Matches the banner images' actual 1343x571
-                              // pixel size so BoxFit.cover below shows each one
-                              // in full instead of cropping it to fit a fixed
-                              // height that doesn't match their real proportions.
-                              aspectRatio: 1343 / 571,
-                              autoPlay: true,
-                              autoPlayInterval: const Duration(seconds: 4),
-                              enlargeCenterPage: true,
-                              viewportFraction: 0.92,
-                              onPageChanged: (index, reason) {
-                                setState(() => _currentBannerIndex = index);
-                              },
-                            ),
-                            itemBuilder: (context, index, realIndex) {
-                              return ClipRRect(
-                                borderRadius: AppRadius.mdRadius,
-                                child: CachedNetworkImage(
-                                  imageUrl: _bannerImageUrls[index],
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: AppColors.surfaceSoft,
-                                    child: const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                        color: AppColors.surfaceSoft,
-                                        child: const Icon(
-                                          Icons.image_not_supported,
-                                          color: AppColors.textMuted,
-                                        ),
-                                      ),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(
-                              _bannerImageUrls.length,
-                              (index) => AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                width: _currentBannerIndex == index ? 18 : 7,
-                                height: 7,
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _currentBannerIndex == index
-                                      ? AppColors.primary
-                                      : AppColors.border,
-                                  borderRadius: BorderRadius.circular(999),
+                    SliverSafeArea(
+                      // The header above already accounted for the top
+                      // inset itself; this restores the normal safe-area
+                      // padding (left/right notches, bottom gesture area)
+                      // for everything else on the page.
+                      top: false,
+                      sliver: SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 16),
+                            const _BannerCarousel(),
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
+                              child: Text(
+                                'الأقسام',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                             ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
-                            child: Text(
-                              'الأقسام',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            height: 146,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                              ),
-                              itemCount: categories.length,
-                              itemBuilder: (context, index) {
-                                final cat = categories[index];
-                                return Padding(
-                                  padding: const EdgeInsets.all(6.0),
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              CategoryScreen(category: cat),
-                                        ),
-                                      );
-                                    },
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color:
-                                                  AppColors
-                                                      .categoryAccents[index %
-                                                      AppColors
-                                                          .categoryAccents
-                                                          .length],
-                                              width: 2,
-                                            ),
+                            SizedBox(
+                              height: 146,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                itemCount: categories.length,
+                                itemBuilder: (context, index) {
+                                  final cat = categories[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.all(6.0),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                CategoryScreen(category: cat),
                                           ),
-                                          child: CircleAvatar(
-                                            radius: 30,
-                                            backgroundColor:
-                                                AppColors.surfaceSoft,
-                                            backgroundImage:
-                                                cat.imageUrl.isNotEmpty
-                                                ? NetworkImage(cat.imageUrl)
-                                                : null,
-                                            child: cat.imageUrl.isEmpty
-                                                ? Icon(
-                                                    Icons.category,
-                                                    color:
+                                        );
+                                      },
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color:
+                                                    AppColors
+                                                        .categoryAccents[index %
                                                         AppColors
-                                                            .categoryAccents[index %
-                                                            AppColors
-                                                                .categoryAccents
-                                                                .length],
-                                                    size: 25,
-                                                  )
-                                                : null,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        SizedBox(
-                                          width: 75,
-                                          child: Text(
-                                            cat.name,
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColors.textPrimary,
+                                                            .categoryAccents
+                                                            .length],
+                                                width: 2,
+                                              ),
                                             ),
-                                            textAlign: TextAlign.center,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
+                                            child: CircleAvatar(
+                                              radius: 30,
+                                              backgroundColor:
+                                                  AppColors.surfaceSoft,
+                                              // CachedNetworkImageProvider
+                                              // (vs. plain NetworkImage) gives
+                                              // this a disk cache, so the same
+                                              // category icon isn't
+                                              // re-downloaded every time the
+                                              // home screen is reopened.
+                                              backgroundImage:
+                                                  cat.imageUrl.isNotEmpty
+                                                  ? CachedNetworkImageProvider(
+                                                      cat.imageUrl,
+                                                    )
+                                                  : null,
+                                              child: cat.imageUrl.isEmpty
+                                                  ? Icon(
+                                                      Icons.category,
+                                                      color:
+                                                          AppColors
+                                                              .categoryAccents[index %
+                                                              AppColors
+                                                                  .categoryAccents
+                                                                  .length],
+                                                      size: 25,
+                                                    )
+                                                  : null,
+                                            ),
                                           ),
-                                        ),
-                                        Text(
-                                          '${cat.count} منتج',
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: AppColors.textMuted,
+                                          const SizedBox(height: 6),
+                                          SizedBox(
+                                            width: 75,
+                                            child: Text(
+                                              cat.name,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          Text(
+                                            '${cat.count} منتج',
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: AppColors.textMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          _buildSection(
-                            title: 'السلاسل القصصية',
-                            products: collectionsProducts,
-                            seeMoreBuilder: collectionsCategory != null
-                                ? (context) => CategoryScreen(
-                                    category: collectionsCategory,
-                                  )
-                                : null,
-                          ),
-                          _buildSection(
-                            title: 'الكتب المصورة',
-                            products: featuredBooksProducts,
-                            // Prefer the matching "الكتب المصورة" category so
-                            // "more" browses that category specifically;
-                            // only fall back to the whole catalog if no such
-                            // category exists on the backend.
-                            seeMoreBuilder: featuredBooksCategory != null
-                                ? (context) => CategoryScreen(
-                                    category: featuredBooksCategory,
-                                  )
-                                : (context) =>
-                                    const CategoryScreen(title: 'كل الكتب'),
-                          ),
-                          _buildSection(
-                            title: 'الكتب التعليمية',
-                            products: educationalBooksProducts,
-                            seeMoreBuilder: educationalBooksCategory != null
-                                ? (context) => CategoryScreen(
-                                    category: educationalBooksCategory,
-                                  )
-                                : null,
-                          ),
-                          _buildSection(
-                            title: 'الألعاب التعليمية',
-                            products: intellectualGamesProducts,
-                            seeMoreBuilder: intellectualGamesCategory != null
-                                ? (context) => CategoryScreen(
-                                    category: intellectualGamesCategory,
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                            _buildSection(
+                              title: 'السلاسل القصصية',
+                              products: collectionsProducts,
+                              seeMoreBuilder: collectionsCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: collectionsCategory,
+                                    )
+                                  : null,
+                            ),
+                            _buildSection(
+                              title: 'الكتب المصورة',
+                              products: featuredBooksProducts,
+                              // Prefer the matching "الكتب المصورة" category so
+                              // "more" browses that category specifically;
+                              // only fall back to the whole catalog if no such
+                              // category exists on the backend.
+                              seeMoreBuilder: featuredBooksCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: featuredBooksCategory,
+                                    )
+                                  : (context) =>
+                                        const CategoryScreen(title: 'كل الكتب'),
+                            ),
+                            _buildSection(
+                              title: 'الكتب التعليمية',
+                              products: educationalBooksProducts,
+                              seeMoreBuilder: educationalBooksCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: educationalBooksCategory,
+                                    )
+                                  : null,
+                            ),
+                            _buildSection(
+                              title: 'الألعاب التعليمية',
+                              products: intellectualGamesProducts,
+                              seeMoreBuilder: intellectualGamesCategory != null
+                                  ? (context) => CategoryScreen(
+                                      category: intellectualGamesCategory,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -504,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0),//4
+                padding: const EdgeInsets.symmetric(horizontal: 0), //4
                 child: SizedBox(
                   width: 170,
                   child: ProductCard(product: products[index]),
@@ -518,6 +481,139 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// The autoplay carousel owns its own `_currentBannerIndex` state in its
+/// own widget rather than on `_HomeScreenState` -- previously every
+/// auto-slide (every 4s, for as long as the home screen is alive)
+/// triggered `setState` on the state that also owns every product list
+/// and the categories row, rebuilding the entire home screen just to
+/// move the banner dots.
+class _BannerCarousel extends StatefulWidget {
+  const _BannerCarousel();
+
+  @override
+  State<_BannerCarousel> createState() => _BannerCarouselState();
+}
+
+class _BannerCarouselState extends State<_BannerCarousel> {
+  int _currentBannerIndex = 0;
+
+  static const List<String> _bannerImageUrls = [
+    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh2.webp',
+    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh3.webp',
+    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh1.webp',
+  ];
+
+  // The banner images' own pixel proportions (used below to derive the
+  // carousel's aspect ratio so nothing gets cropped -- see the comment
+  // on `aspectRatio` in CarouselOptions).
+  static const double _imageAspectRatio = 1343 / 571;
+  static const double _viewportFraction = 0.92;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      // Matches the 16px horizontal margin already used by the section
+      // titles and the rest of the home screen's content below the
+      // header, so the banner doesn't sit edge-to-edge while everything
+      // else on the page is inset.
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CarouselSlider.builder(
+            itemCount: _bannerImageUrls.length,
+            options: CarouselOptions(
+              // CarouselOptions.aspectRatio sets the carousel's fixed
+              // HEIGHT as `availableWidth / aspectRatio`, but each item's
+              // own WIDTH is only `availableWidth * viewportFraction`.
+              // Passing the image's raw aspect ratio here made every
+              // item's box relatively taller/narrower than the source
+              // image, so BoxFit.cover below was cropping the left/right
+              // edges of every banner (and any Arabic text baked in near
+              // those edges) to fill that mismatched box. Dividing by
+              // viewportFraction makes the item box's actual ratio match
+              // the image's ratio exactly, so `cover` no longer needs to
+              // crop anything.
+              aspectRatio: _imageAspectRatio / _viewportFraction,
+              autoPlay: true,
+              autoPlayInterval: const Duration(seconds: 4),
+              enlargeCenterPage: true,
+              viewportFraction: _viewportFraction,
+              onPageChanged: (index, reason) {
+                setState(() => _currentBannerIndex = index);
+              },
+            ),
+            itemBuilder: (context, index, realIndex) {
+              return ClipRRect(
+                borderRadius: AppRadius.mdRadius,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: _bannerImageUrls[index],
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: AppColors.surfaceSoft,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: AppColors.surfaceSoft,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                    // A subtle scrim protects the readability of any text
+                    // near the bottom edge of the promotional artwork
+                    // against busy/bright photo backgrounds, independent
+                    // of what any individual banner image looks like.
+                    IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.28),
+                              Colors.black.withValues(alpha: 0.0),
+                            ],
+                            stops: const [0.0, 0.55],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              _bannerImageUrls.length,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: _currentBannerIndex == index ? 18 : 7,
+                height: 7,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: _currentBannerIndex == index
+                      ? AppColors.primary
+                      : AppColors.border,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The home screen's search field: as-you-type suggestions in a floating
 /// dropdown (via CompositedTransformTarget/Follower + an Overlay, so it
 /// draws above the rest of the scroll content regardless of where this
@@ -525,6 +621,8 @@ class _HomeScreenState extends State<HomeScreen> {
 /// SearchScreen. Tapping a suggestion jumps straight to that product;
 /// submitting (or the "see all" row) opens the full results grid.
 class _HomeSearchBar extends StatefulWidget {
+  const _HomeSearchBar();
+
   @override
   State<_HomeSearchBar> createState() => _HomeSearchBarState();
 }
@@ -663,30 +761,46 @@ class _HomeSearchBarState extends State<_HomeSearchBar> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: CompositedTransformTarget(
-        link: _layerLink,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceSoft,
-            borderRadius: AppRadius.lgRadius,
-          ),
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            onChanged: _onChanged,
-            onSubmitted: (_) => _openFullResults(),
-            textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              hintText: 'ابحث عن المنتجات والفئات...',
-              hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
-              prefixIcon: Icon(Icons.search, color: AppColors.textMuted),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(vertical: 14),
-            ),
+    // No outer margin here -- the parent header Container already applies
+    // the header's single 18px horizontal margin, so this bar's left/right
+    // edges line up exactly with the logo row above it instead of adding
+    // a second, slightly different inset on top of that one.
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          onChanged: _onChanged,
+          onSubmitted: (_) => _openFullResults(),
+          textInputAction: TextInputAction.search,
+          decoration: const InputDecoration(
+            hintText: 'ابحث عن المنتجات والفئات...',
+            hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
+            prefixIcon: Icon(Icons.search, color: AppColors.textMuted),
+            // Keeps the icon's tap/visual box a fixed, centered size
+            // regardless of how tight contentPadding gets, so it stays
+            // clearly and consistently aligned with the hint text.
+            prefixIconConstraints: BoxConstraints(minWidth: 40, minHeight: 40),
+            // The app-wide InputDecorationTheme sets `enabledBorder` and
+            // `focusedBorder` as separate fields from `border` -- those
+            // take precedence over `border: InputBorder.none` whenever
+            // they're non-null. Left unset, this field was painting the
+            // theme's own filled, bordered box (different corner radius,
+            // a visible outline, a purple focus ring) nested inside this
+            // widget's own pill-shaped Container, showing up as two
+            // mismatched rounded boxes stacked on top of each other.
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(vertical: 10),
           ),
         ),
       ),
@@ -755,6 +869,8 @@ class _SuggestionsPanel extends StatelessWidget {
                                   : CachedNetworkImage(
                                       imageUrl: product.imageUrl,
                                       fit: BoxFit.cover,
+                                      memCacheWidth: 80,
+                                      memCacheHeight: 80,
                                     ),
                             ),
                           ),

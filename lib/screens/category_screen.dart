@@ -129,7 +129,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Future<void> loadProducts() async {
     try {
       if (!mounted) return;
-      setState(() => isLoading = true);
+      // Only block the screen with a spinner on the very first load. A
+      // currency switch or pull-to-refresh calls this again with products
+      // already on screen -- blanking to a spinner every time was
+      // discarding a perfectly good list the user was already looking at
+      // just to show the exact same data a moment later.
+      if (products.isEmpty) {
+        setState(() => isLoading = true);
+      }
       final prodData = await _api.getProducts(
         category: widget.category?.slug ?? widget.category?.id.toString(),
         page: 1,

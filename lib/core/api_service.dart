@@ -38,10 +38,18 @@ class _CookieStore {
 }
 
 class ApiService {
+  // Every screen/provider previously did `final _api = ApiService()`,
+  // each constructing its own Dio and paying a fresh TLS handshake per
+  // screen instead of reusing a keep-alive connection to the same host.
+  // A factory constructor makes every existing call site a singleton
+  // with no changes needed anywhere else.
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+
   final Dio _dio = Dio();
   final Dio _wpDio = Dio();
 
-  ApiService() {
+  ApiService._internal() {
     _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
