@@ -51,10 +51,29 @@ class PushNotifications {
     final messaging = FirebaseMessaging.instance;
 
     await messaging.requestPermission(alert: true, badge: true, sound: true);
-    await messaging.subscribeToTopic(allUsersTopic);
 
-    final token = await messaging.getToken();
-    debugPrint('FCM token: $token');
+    // subscribeToTopic()/getToken() need network to reach Firebase and
+    // have no built-in timeout -- without connectivity they can otherwise
+    // hang far longer than a user will wait, so each gets its own bounded
+    // timeout and failures are swallowed. This runs unawaited from
+    // main.dart already; the try/catch here just stops a timeout/offline
+    // error from becoming an unhandled exception in that detached future.
+    try {
+      await messaging
+          .subscribeToTopic(allUsersTopic)
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('FCM subscribeToTopic failed: $e');
+    }
+
+    try {
+      final token = await messaging.getToken().timeout(
+        const Duration(seconds: 15),
+      );
+      debugPrint('FCM token: $token');
+    } catch (e) {
+      debugPrint('FCM getToken failed: $e');
+    }
 
     FirebaseMessaging.onMessage.listen((message) {
       final notification = message.notification;

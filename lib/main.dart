@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -29,7 +31,14 @@ void main() async {
   if (!kIsWeb) {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    await PushNotifications.init();
+    // Deliberately NOT awaited: getToken()/subscribeToTopic() inside this
+    // need network to reach Firebase and have no built-in timeout, so in
+    // airplane mode (or right after a fresh install with no connection
+    // yet) this could hang indefinitely -- which, awaited here, blocked
+    // runApp() and left the app stuck on the native splash screen forever.
+    // Push setup can finish whenever connectivity allows; nothing else in
+    // the app depends on it being ready before first frame.
+    unawaited(PushNotifications.init());
   }
   final initialCurrency = await CurrencyProvider.loadInitial();
   runApp(MyApp(initialCurrency: initialCurrency));
