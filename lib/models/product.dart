@@ -1,5 +1,20 @@
 import '../core/string_utils.dart';
 
+class ProductAttribute {
+  final String name;
+  final String value;
+
+  const ProductAttribute({required this.name, required this.value});
+
+  factory ProductAttribute.fromJson(Map<String, dynamic> json) =>
+      ProductAttribute(
+        name: json['name']?.toString() ?? '',
+        value: json['value']?.toString() ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'name': name, 'value': value};
+}
+
 class Product {
   final int id;
   final String name;
@@ -8,6 +23,12 @@ class Product {
   final String imageUrl;
   final List<String> imageUrls;
   final String description;
+  // The website renders short_description as a bold lead title followed
+  // by its body paragraph(s) -- see StringUtils.splitLeadTitle. Empty
+  // descriptionTitle means the source HTML didn't follow that convention;
+  // show descriptionBody alone in that case.
+  final String descriptionTitle;
+  final String descriptionBody;
   final String type;
   final String externalUrl;
   final String buttonText;
@@ -15,6 +36,7 @@ class Product {
   final double averageRating;
   final bool inStock;
   final String currencySymbol;
+  final List<ProductAttribute> additionalInformation;
 
   Product({
     required this.id,
@@ -24,6 +46,8 @@ class Product {
     required this.imageUrl,
     required this.imageUrls,
     required this.description,
+    this.descriptionTitle = '',
+    this.descriptionBody = '',
     required this.type,
     required this.externalUrl,
     required this.buttonText,
@@ -31,6 +55,7 @@ class Product {
     this.averageRating = 0.0,
     this.inStock = true,
     this.currencySymbol = '\$',
+    this.additionalInformation = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -47,7 +72,19 @@ class Product {
     // woocommerce-product-details__short-description block shown under
     // the title/price on the website) -- deliberately not falling back to
     // the full description field.
-    final description = json['short_description']?.toString() ?? '';
+    final descriptionHtml = json['short_description']?.toString() ?? '';
+    final description = StringUtils.stripHtmlTags(descriptionHtml);
+    // toJson() round-trips through local storage (recently-viewed) with
+    // the already-split title/body rather than the original HTML -- reuse
+    // those directly when present instead of re-deriving from
+    // short_description, which by then is plain text with no <strong> tag
+    // left to detect a lead title from.
+    final parsedDescription = json.containsKey('description_title')
+        ? ParsedDescription(
+            title: json['description_title']?.toString() ?? '',
+            body: json['description_body']?.toString() ?? '',
+          )
+        : StringUtils.splitLeadTitle(descriptionHtml);
 
     final categories = json['categories'] is List
         ? (json['categories'] as List)
@@ -55,6 +92,16 @@ class Product {
               .where((name) => name.isNotEmpty)
               .toList()
         : <String>[];
+
+    final additionalInformation = json['additional_information'] is List
+        ? (json['additional_information'] as List)
+              .whereType<Map>()
+              .map((info) => ProductAttribute.fromJson(
+                    Map<String, dynamic>.from(info),
+                  ))
+              .where((attr) => attr.name.isNotEmpty && attr.value.isNotEmpty)
+              .toList()
+        : <ProductAttribute>[];
 
     return Product(
       id: json['id'] is int
@@ -65,7 +112,9 @@ class Product {
       regularPrice: (json['regular_price'] ?? '0').toString(),
       imageUrl: images.isNotEmpty ? images.first : '',
       imageUrls: images,
-      description: StringUtils.stripHtmlTags(description),
+      description: description,
+      descriptionTitle: parsedDescription.title,
+      descriptionBody: parsedDescription.body,
       type: json['type']?.toString() ?? '',
       externalUrl: json['external_url']?.toString() ?? '',
       buttonText: json['button_text']?.toString() ?? '',
@@ -74,6 +123,7 @@ class Product {
           double.tryParse(json['average_rating']?.toString() ?? '') ?? 0.0,
       inStock: json['stock_status']?.toString() != 'outofstock',
       currencySymbol: json['currency_symbol']?.toString() ?? '\$',
+      additionalInformation: additionalInformation,
     );
   }
 
@@ -87,6 +137,8 @@ class Product {
     'regular_price': regularPrice,
     'images': imageUrls.map((src) => {'src': src}).toList(),
     'short_description': description,
+    'description_title': descriptionTitle,
+    'description_body': descriptionBody,
     'type': type,
     'external_url': externalUrl,
     'button_text': buttonText,
@@ -98,5 +150,8 @@ class Product {
     'average_rating': averageRating.toString(),
     'stock_status': inStock ? 'instock' : 'outofstock',
     'currency_symbol': currencySymbol,
+    'additional_information': additionalInformation
+        .map((attr) => attr.toJson())
+        .toList(),
   };
 }

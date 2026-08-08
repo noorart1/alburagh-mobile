@@ -29,6 +29,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _selectedImageIndex = 0;
   int _quantity = 1;
   List<Product> _suggestedProducts = [];
+  bool _showAdditionalInfo = false;
 
   void _incrementQuantity() => setState(() => _quantity++);
 
@@ -169,16 +170,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  Text(
-                    widget.product.description.isNotEmpty
-                        ? widget.product.description
-                        : 'يتم تحديث الوصف الكامل لهذا المنتج.',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.6,
-                      color: AppColors.textPrimary,
-                    ),
+                  _DetailInfoTabs(
+                    showAdditionalInfo: _showAdditionalInfo,
+                    onChanged: (value) =>
+                        setState(() => _showAdditionalInfo = value),
                   ),
+                  const SizedBox(height: 16),
+                  _showAdditionalInfo
+                      ? _AdditionalInfoTable(
+                          attributes: widget.product.additionalInformation,
+                        )
+                      : _DescriptionCard(product: widget.product),
                   const SizedBox(height: 32),
                   if (!isExternal) ...[
                     _QuantitySelector(
@@ -252,6 +254,226 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               _SuggestedProductsSection(products: _suggestedProducts),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The description/additional-info toggle used to be two children in a
+/// single RTL Row (first child on the right); building it manually in an
+/// explicit order sidesteps relying on RTL child-order semantics for
+/// something that has a fixed visual spec -- "الوصف" on the right,
+/// "معلومات إضافية" on the left.
+class _DetailInfoTabs extends StatelessWidget {
+  final bool showAdditionalInfo;
+  final ValueChanged<bool> onChanged;
+
+  const _DetailInfoTabs({
+    required this.showAdditionalInfo,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          textDirection: TextDirection.rtl,
+          children: [
+            _DetailInfoTab(
+              label: 'الوصف',
+              selected: !showAdditionalInfo,
+              onTap: () => onChanged(false),
+            ),
+            const SizedBox(width: 24),
+            _DetailInfoTab(
+              label: 'معلومات إضافية',
+              selected: showAdditionalInfo,
+              onTap: () => onChanged(true),
+            ),
+          ],
+        ),
+        const Divider(height: 1, color: AppColors.border),
+      ],
+    );
+  }
+}
+
+/// The description tab's content: the site renders short_description as a
+/// bold lead title over its body paragraph(s) inside a yellow card, the
+/// same treatment the additional-info table gets, not plain body text.
+class _DescriptionCard extends StatelessWidget {
+  final Product product;
+
+  const _DescriptionCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBody = product.descriptionBody.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (product.descriptionTitle.isNotEmpty) ...[
+            Text(
+              product.descriptionTitle,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                height: 1.5,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (hasBody) const SizedBox(height: 12),
+          ],
+          Text(
+            hasBody
+                ? product.descriptionBody
+                : (product.description.isNotEmpty
+                      ? product.description
+                      : 'يتم تحديث الوصف الكامل لهذا المنتج.'),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.7,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailInfoTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DetailInfoTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? AppColors.textPrimary : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected ? AppColors.textPrimary : AppColors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdditionalInfoTable extends StatelessWidget {
+  final List<ProductAttribute> attributes;
+
+  const _AdditionalInfoTable({required this.attributes});
+
+  static final _arabicChar = RegExp(r'[؀-ۿ]');
+
+  // Values like "27 x 28.5 x 1" (dimensions) or an ISBN are separate
+  // number groups with nothing strongly-directional anchoring them --
+  // under an RTL paragraph, Unicode's bidi algorithm can reorder those
+  // groups relative to each other (e.g. the ISBN's hyphen-separated
+  // segments swapping places), which doesn't happen for a plain LTR
+  // paragraph. Values that actually contain Arabic text (author,
+  // publisher, ...) still want RTL so they read naturally.
+  TextDirection _directionFor(String value) =>
+      _arabicChar.hasMatch(value) ? TextDirection.rtl : TextDirection.ltr;
+
+  @override
+  Widget build(BuildContext context) {
+    if (attributes.isEmpty) {
+      return const Text(
+        'لا تتوفر معلومات إضافية لهذا المنتج.',
+        style: TextStyle(fontSize: 15, color: AppColors.textMuted),
+      );
+    }
+
+    // A real Table (rather than one Row per line) so every row's label
+    // column shares the same width -- sized to the widest label across
+    // all rows via IntrinsicColumnWidth -- with a vertical divider between
+    // the two columns, matching the site's own two-column table instead of
+    // each row sizing its label column independently.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Table(
+        columnWidths: const {0: IntrinsicColumnWidth(), 1: FlexColumnWidth()},
+        border: TableBorder.symmetric(
+          inside: const BorderSide(color: AppColors.white, width: 1),
+        ),
+        children: [
+          for (final attribute in attributes)
+            TableRow(
+              decoration: const BoxDecoration(color: AppColors.background),
+              // In RTL, a TableRow's *first* child renders in the
+              // rightmost column -- the label belongs there, with the
+              // value on the left, so the label cell is listed first.
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Text(
+                    attribute.name,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Text(
+                    attribute.value,
+                    textAlign: TextAlign.center,
+                    textDirection: _directionFor(attribute.value),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -356,7 +578,8 @@ class _QuantitySelector extends StatelessWidget {
         const SizedBox(width: 16),
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
+            color: AppColors.white,
+            border: Border.all(color: Colors.black),
             borderRadius: AppRadius.smRadius,
           ),
           child: Row(

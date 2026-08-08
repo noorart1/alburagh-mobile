@@ -76,13 +76,41 @@ return array(
 }
 
 // Builds the same data WooCommerce's own "Additional Information" product
-// page tab shows: every attribute marked "visible on the product page",
-// resolved to its display label and value(s). Shared by every endpoint
-// that serializes a full product (catalog listings, cart, wishlist) so
-// the app gets this regardless of which screen a product was reached
-// through, rather than duplicating this logic three times.
+// page tab shows: weight and dimensions (if set), then every attribute
+// marked "visible on the product page", each resolved to its display
+// label and value(s). Shared by every endpoint that serializes a full
+// product (catalog listings, cart, wishlist) so the app gets this
+// regardless of which screen a product was reached through, rather than
+// duplicating this logic three times.
 function alburagh_get_product_additional_information($product) {
 $info = array();
+
+// WooCommerce's own additional-information tab (templates/single-product/
+// tabs/additional-information.php) always leads with weight/dimensions
+// rows before the attribute rows -- those come from the product's core
+// Shipping fields, not from get_attributes(), so the loop below alone was
+// missing them entirely even though the website's own tab shows them.
+//
+// wc_format_weight()/wc_format_dimensions() are written to be echoed
+// straight into HTML, so their "x" separator is the literal entity
+// "&times;" -- fine in a browser, but this API returns plain JSON text
+// that the app displays as-is, so left undecoded it showed up as the
+// literal characters "&times;" instead of "x". html_entity_decode()
+// resolves that (and anything else HTML-oriented WooCommerce formatting
+// might introduce) to plain text before it goes in the response.
+if ($product->has_weight()) {
+$info[] = array(
+'name' => __('Weight', 'woocommerce'),
+'value' => html_entity_decode(wc_format_weight($product->get_weight()), ENT_QUOTES, 'UTF-8')
+);
+}
+
+if ($product->has_dimensions()) {
+$info[] = array(
+'name' => __('Dimensions', 'woocommerce'),
+'value' => html_entity_decode(wc_format_dimensions($product->get_dimensions(false)), ENT_QUOTES, 'UTF-8')
+);
+}
 
 foreach ($product->get_attributes() as $attribute) {
 if (!$attribute->get_visible()) {
