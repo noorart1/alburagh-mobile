@@ -58,7 +58,7 @@ class ProductCard extends StatelessWidget {
                               )
                             : CachedNetworkImage(
                                 imageUrl: product.imageUrl,
-                                fit: BoxFit.contain,
+                                fit: BoxFit.cover,
                                 alignment: Alignment.center,
                                 // Grid cards display this at ~170 logical px
                                 // wide; without a cache size, the plugin

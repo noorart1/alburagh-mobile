@@ -75,6 +75,41 @@ return array(
 );
 }
 
+// Builds the same data WooCommerce's own "Additional Information" product
+// page tab shows: every attribute marked "visible on the product page",
+// resolved to its display label and value(s). Shared by every endpoint
+// that serializes a full product (catalog listings, cart, wishlist) so
+// the app gets this regardless of which screen a product was reached
+// through, rather than duplicating this logic three times.
+function alburagh_get_product_additional_information($product) {
+$info = array();
+
+foreach ($product->get_attributes() as $attribute) {
+if (!$attribute->get_visible()) {
+continue;
+}
+
+$name = wc_attribute_label($attribute->get_name());
+
+if ($attribute->is_taxonomy()) {
+$terms = wc_get_product_terms(
+$product->get_id(),
+$attribute->get_name(),
+array('fields' => 'names')
+);
+$value = implode(', ', $terms);
+} else {
+$value = implode(', ', $attribute->get_options());
+}
+
+if ($value !== '') {
+$info[] = array('name' => $name, 'value' => $value);
+}
+}
+
+return $info;
+}
+
 // CORS: the Flutter web build calls this API cross-origin from the browser
 // (mobile/desktop builds aren't subject to CORS, which is why this only
 // broke on `flutter run -d chrome`). WordPress core normally sends
@@ -962,6 +997,7 @@ return array(
 'average_rating' => floatval($product->get_average_rating()),
 'rating_count' => intval($product->get_rating_count()),
 'is_featured' => $product->is_featured(),
+'additional_information' => alburagh_get_product_additional_information($product),
 'date_created' => $product->get_date_created() ? $product->get_date_created()->date('Y-m-d H:i:s') : null
 );
 }
@@ -1116,6 +1152,7 @@ return array(
 'categories' => $categories,
 'average_rating' => floatval($product->get_average_rating()),
 'rating_count' => intval($product->get_rating_count()),
+'additional_information' => alburagh_get_product_additional_information($product),
 'is_featured' => $product->is_featured(),
 );
 }
@@ -1400,6 +1437,7 @@ return array(
 'categories' => $categories,
 'average_rating' => floatval($product->get_average_rating()),
 'rating_count' => intval($product->get_rating_count()),
+'additional_information' => alburagh_get_product_additional_information($product),
 'is_featured' => $product->is_featured(),
 );
 }

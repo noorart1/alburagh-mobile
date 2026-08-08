@@ -137,8 +137,17 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
-      // Merge guest cart with user cart after successful login
-      await _cartProvider.mergeCart(_cartProvider.items);
+      // Snapshot the guest cart, then drop the session cookie before the
+      // first authenticated cart call: without that reset, WooCommerce's
+      // own cookie-based session migration (in init_wc_cart()) would
+      // silently overwrite the account's own saved cart with whatever
+      // this cookie's guest session held, permanently losing anything
+      // saved there before this login. Resetting first makes the
+      // authenticated session load the account's real cart untouched, and
+      // mergeCart() then additively re-adds the guest items on top of it.
+      final guestItems = List<CartItem>.from(_cartProvider.items);
+      _api.resetSession();
+      await _cartProvider.mergeCart(guestItems);
       // Not awaited — see _loadSavedAuth() for why.
       ensureProfileLoaded();
       // Refresh with this account's wishlist — see _loadSavedAuth() for why
@@ -320,8 +329,13 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('user_name');
 
     notifyListeners();
-    // Clear cart after logout
-    await _cartProvider.clearCart();
+    // Local-only reset -- see CartProvider.resetLocal's doc comment for
+    // why logout must not call the server clearCart API here.
+    _cartProvider.resetLocal();
+    // Also drop the session cookie so guest browsing after logout starts a
+    // fresh anonymous WooCommerce session instead of continuing to read/
+    // write this account's own cart via its still-linked cookie.
+    _api.resetSession();
     // Drop the cached wishlist too (local only — see WishlistProvider.reset)
     // so its bottom-bar badge doesn't keep showing the previous account's
     // count while logged out.

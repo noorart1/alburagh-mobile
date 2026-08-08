@@ -128,6 +128,12 @@ class CartProvider with ChangeNotifier {
     }
   }
 
+  /// Re-adds a snapshot of guest-cart items on top of whatever's already
+  /// in the (now-authenticated) server cart. Safe to call after
+  /// [ApiService.resetSession] clears the stale session cookie -- without
+  /// that reset, WooCommerce's own cookie-based session migration would
+  /// already have copied these same items onto the account's cart,
+  /// making this double them.
   Future<void> mergeCart(List<CartItem> guestItems) async {
     try {
       for (final item in guestItems) {
@@ -141,6 +147,20 @@ class CartProvider with ChangeNotifier {
     } catch (e) {
       debugPrint('Error merging cart: $e');
     }
+  }
+
+  /// Clears the locally displayed cart only -- does not touch the
+  /// server-side cart. Logout must never call the clearCart API: that
+  /// empties whatever WooCommerce session the request's cookie currently
+  /// points at, which after logout's stale-token window can be the
+  /// account's own saved cart rather than a guest one, permanently
+  /// destroying it.
+  void resetLocal() {
+    _items.clear();
+    _serverTotal = 0;
+    _serverSubtotal = 0;
+    _error = null;
+    notifyListeners();
   }
 
   Future<bool> removeFromCart(Product product) async {

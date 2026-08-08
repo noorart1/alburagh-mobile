@@ -43,8 +43,11 @@ class Product {
               .toList()
         : <String>[];
 
-    final description = (json['short_description'] ?? json['description'] ?? '')
-        .toString();
+    // Only WooCommerce's own short_description (the
+    // woocommerce-product-details__short-description block shown under
+    // the title/price on the website) -- deliberately not falling back to
+    // the full description field.
+    final description = json['short_description']?.toString() ?? '';
 
     final categories = json['categories'] is List
         ? (json['categories'] as List)

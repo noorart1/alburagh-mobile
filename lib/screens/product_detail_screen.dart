@@ -169,15 +169,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  const Text(
-                    'وصف المنتج:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Text(
                     widget.product.description.isNotEmpty
                         ? widget.product.description

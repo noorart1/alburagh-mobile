@@ -35,6 +35,8 @@ class _CookieStore {
     if (_cookies.isEmpty) return null;
     return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
   }
+
+  static void clear() => _cookies.clear();
 }
 
 class ApiService {
@@ -266,6 +268,14 @@ class ApiService {
     );
     return response.data is Map ? response.data['url'] as String? : null;
   }
+
+  /// Drops the WooCommerce session cookie so the next request starts a
+  /// brand-new anonymous session instead of reusing whatever account the
+  /// cookie's customer_id was last tied to. Call this around login/logout
+  /// so a stale cookie can't leak one account's cart into another
+  /// session -- see _CookieStore's doc comment for why the cookie exists
+  /// and gets tied to a specific customer_id in the first place.
+  void resetSession() => _CookieStore.clear();
 
   Future<Options?> _authOptions() async {
     final prefs = await SharedPreferences.getInstance();

@@ -133,8 +133,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty)
+                      if (v == null || v.trim().isEmpty) {
                         return 'أدخل البريد الإلكتروني';
+                      }
                       if (!v.contains('@')) return 'البريد الإلكتروني غير صحيح';
                       return null;
                     },
@@ -180,8 +181,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'أدخل كلمة المرور';
-                      if (v.length < 6)
+                      if (v.length < 6) {
                         return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
+                      }
                       return null;
                     },
                   ),
