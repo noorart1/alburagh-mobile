@@ -400,18 +400,6 @@ class _AdditionalInfoTable extends StatelessWidget {
 
   const _AdditionalInfoTable({required this.attributes});
 
-  static final _arabicChar = RegExp(r'[؀-ۿ]');
-
-  // Values like "27 x 28.5 x 1" (dimensions) or an ISBN are separate
-  // number groups with nothing strongly-directional anchoring them --
-  // under an RTL paragraph, Unicode's bidi algorithm can reorder those
-  // groups relative to each other (e.g. the ISBN's hyphen-separated
-  // segments swapping places), which doesn't happen for a plain LTR
-  // paragraph. Values that actually contain Arabic text (author,
-  // publisher, ...) still want RTL so they read naturally.
-  TextDirection _directionFor(String value) =>
-      _arabicChar.hasMatch(value) ? TextDirection.rtl : TextDirection.ltr;
-
   @override
   Widget build(BuildContext context) {
     if (attributes.isEmpty) {
@@ -430,9 +418,7 @@ class _AdditionalInfoTable extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: Table(
         columnWidths: const {0: IntrinsicColumnWidth(), 1: FlexColumnWidth()},
-        border: TableBorder.symmetric(
-          inside: const BorderSide(color: AppColors.white, width: 1),
-        ),
+        border: TableBorder.all(color: Colors.black, width: 1),
         children: [
           for (final attribute in attributes)
             TableRow(
@@ -449,6 +435,7 @@ class _AdditionalInfoTable extends StatelessWidget {
                   child: Text(
                     attribute.name,
                     textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -463,8 +450,8 @@ class _AdditionalInfoTable extends StatelessWidget {
                   ),
                   child: Text(
                     attribute.value,
-                    textAlign: TextAlign.center,
-                    textDirection: _directionFor(attribute.value),
+                    textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
                     style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textPrimary,
