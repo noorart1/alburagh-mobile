@@ -21,6 +21,17 @@ import 'screens/cart_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Flutter's default ImageCache caps at 100MB / 1000 entries. Product
+  // cards now decode each image close to its displayed size (~220 logical
+  // px wide, see ProductCard's memCacheWidth), so ~2-3MB per decoded image
+  // -- the default cap holds only ~30-40 of those in memory at once, which
+  // a few screens' worth of scrolling through a long catalog blows past.
+  // Once evicted, scrolling back to an earlier product re-decodes it from
+  // disk cache instead of just repainting, which reads as the image
+  // "flashing" back in. A larger cap keeps more of a long scroll session's
+  // images resident.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 200 << 20; // 200MB
+  PaintingBinding.instance.imageCache.maximumSize = 300;
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

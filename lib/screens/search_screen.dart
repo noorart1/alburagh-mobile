@@ -129,8 +129,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   mainAxisSpacing: 1,
                 ),
                 itemCount: _products.length,
-                itemBuilder: (context, index) =>
-                    ProductCard(product: _products[index]),
+                itemBuilder: (context, index) {
+                  final product = _products[index];
+                  return ProductCard(key: ValueKey(product.id), product: product);
+                },
               ),
             ),
         ],

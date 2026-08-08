@@ -589,11 +589,12 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: products.length,
             itemBuilder: (context, index) {
+              final product = products[index];
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 0), //4
                 child: SizedBox(
                   width: 170,
-                  child: ProductCard(product: products[index]),
+                  child: ProductCard(key: ValueKey(product.id), product: product),
                 ),
               );
             },

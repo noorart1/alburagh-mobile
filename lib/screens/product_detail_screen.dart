@@ -284,13 +284,16 @@ class _SuggestedProductsSection extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: products.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(
-                width: 170,
-                child: ProductCard(product: products[index]),
-              ),
-            ),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: SizedBox(
+                  width: 170,
+                  child: ProductCard(key: ValueKey(product.id), product: product),
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(height: 16),

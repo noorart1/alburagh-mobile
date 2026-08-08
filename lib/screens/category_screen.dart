@@ -9,6 +9,7 @@ import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
+import '../widgets/cart_app_bar_action.dart';
 import '../widgets/product_card.dart';
 
 class CategoryScreen extends StatefulWidget {
@@ -215,16 +216,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title ?? widget.category!.name),
-        actions: [
-          IconButton(
-            icon: Badge(
-              label: Text('${context.watch<CartProvider>().itemCount}'),
-              child: const Icon(Icons.shopping_cart),
-            ),
-            onPressed: () =>
-                Navigator.of(context, rootNavigator: true).pushNamed('/cart'),
-          ),
-        ],
+        actions: const [CartAppBarAction()],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -323,7 +315,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                       SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: math.max(
                                           1,
-                                          ((MediaQuery.of(context).size.width -
+                                          ((MediaQuery.sizeOf(context).width -
                                                       32) /
                                                   171)
                                               .floor(),
@@ -333,9 +325,22 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                         mainAxisSpacing: 1,
                                       ),
                                   delegate: SliverChildBuilderDelegate(
-                                    (context, index) => ProductCard(
-                                      product: filteredProducts[index],
-                                    ),
+                                    (context, index) {
+                                      final product = filteredProducts[index];
+                                      // Keyed by product id (not position) so
+                                      // sorting/search swaps the underlying
+                                      // list without tearing down and
+                                      // rebuilding every card's element --
+                                      // Flutter just moves the existing
+                                      // element (and its already-resolved
+                                      // image state) to its new index
+                                      // instead of re-resolving images that
+                                      // didn't actually change.
+                                      return ProductCard(
+                                        key: ValueKey(product.id),
+                                        product: product,
+                                      );
+                                    },
                                     childCount: filteredProducts.length,
                                   ),
                                 ),

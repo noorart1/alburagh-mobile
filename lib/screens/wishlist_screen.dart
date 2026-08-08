@@ -143,8 +143,10 @@ class _WishlistScreenState extends State<WishlistScreen> {
           mainAxisSpacing: 1,
         ),
         itemCount: wishlist.items.length,
-        itemBuilder: (context, index) =>
-            ProductCard(product: wishlist.items[index]),
+        itemBuilder: (context, index) {
+          final product = wishlist.items[index];
+          return ProductCard(key: ValueKey(product.id), product: product);
+        },
       ),
     );
   }

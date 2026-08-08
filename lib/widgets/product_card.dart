@@ -239,7 +239,15 @@ class _ProductImageState extends State<_ProductImage> {
       // size, the plugin decodes the full source resolution (often several
       // times larger) into memory for every card, which is the dominant
       // RAM cost in a long product grid.
-      memCacheWidth: (MediaQuery.of(context).devicePixelRatio * 220).round(),
+      memCacheWidth: (MediaQuery.devicePixelRatioOf(context) * 220).round(),
+      // The default 500ms placeholder->image fade costs an AnimatedOpacity
+      // per card for every image that enters the viewport during a fling --
+      // with dozens of cards streaming in per second while scrolling fast,
+      // that's a lot of extra animation work competing with the scroll
+      // itself. Instant swap reads as "already there" rather than a visible
+      // fade, and is one less thing the GPU has to composite per frame.
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
       placeholder: (context, url) => const Center(
         child: SizedBox(
           width: 24,
@@ -263,8 +271,13 @@ class _WishlistButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wishlist = context.watch<WishlistProvider>();
-    final isWishlisted = wishlist.isWishlisted(product.id);
+    // select (not watch) so this button only rebuilds when *this* product's
+    // own wishlisted state changes -- watch would rebuild every card's
+    // button on the provider's notifyListeners(), even for a toggle on a
+    // completely different product elsewhere in the grid.
+    final isWishlisted = context.select<WishlistProvider, bool>(
+      (wishlist) => wishlist.isWishlisted(product.id),
+    );
 
     return GestureDetector(
       onTap: () async {

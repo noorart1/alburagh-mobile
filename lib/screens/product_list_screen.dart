@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/product.dart';
-import '../providers/cart_provider.dart';
+import '../widgets/cart_app_bar_action.dart';
 import '../widgets/product_card.dart';
 
 /// Shows a fixed, already-loaded list of products in a grid -- the "see
@@ -25,16 +24,7 @@ class ProductListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        actions: [
-          IconButton(
-            icon: Badge(
-              label: Text('${context.watch<CartProvider>().itemCount}'),
-              child: const Icon(Icons.shopping_cart),
-            ),
-            onPressed: () =>
-                Navigator.of(context, rootNavigator: true).pushNamed('/cart'),
-          ),
-        ],
+        actions: const [CartAppBarAction()],
       ),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
@@ -45,8 +35,10 @@ class ProductListScreen extends StatelessWidget {
           mainAxisSpacing: 1,
         ),
         itemCount: products.length,
-        itemBuilder: (context, index) =>
-            ProductCard(product: products[index]),
+        itemBuilder: (context, index) {
+          final product = products[index];
+          return ProductCard(key: ValueKey(product.id), product: product);
+        },
       ),
     );
   }
