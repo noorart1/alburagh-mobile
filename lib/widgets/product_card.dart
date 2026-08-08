@@ -56,35 +56,7 @@ class ProductCard extends StatelessWidget {
                                 color: AppColors.textMuted,
                                 size: 42,
                               )
-                            : CachedNetworkImage(
-                                imageUrl: product.imageUrl,
-                                fit: BoxFit.cover,
-                                alignment: Alignment.center,
-                                // Grid cards display this at ~170 logical px
-                                // wide; without a cache size, the plugin
-                                // decodes the full source resolution (often
-                                // several times larger) into memory for
-                                // every card, which is the dominant RAM
-                                // cost in a long product grid.
-                                memCacheWidth:
-                                    (MediaQuery.of(context).devicePixelRatio *
-                                            220)
-                                        .round(),
-                                placeholder: (context, url) => const Center(
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Icon(
-                                  Icons.broken_image,
-                                  color: AppColors.textMuted,
-                                  size: 42,
-                                ),
-                              ),
+                            : _ProductImage(imageUrl: product.imageUrl),
                       ),
                     ),
                   ),
@@ -173,6 +145,112 @@ class ProductCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The site serves product photos in two fixed source sizes: 600x800
+/// (portrait) and 600x600 (square). Portrait sources already roughly match
+/// this card's own image slot, so BoxFit.fill looks right; stretching a
+/// square source the same way visibly distorts it, so it needs
+/// BoxFit.contain instead. Which one a given image is isn't known until
+/// it's decoded, so this resolves the image once up front to read its
+/// pixel size and picks the fit before rendering it (via the same
+/// CachedNetworkImage, so the resolve is served from its cache and isn't
+/// a second network fetch).
+class _ProductImage extends StatefulWidget {
+  final String imageUrl;
+
+  const _ProductImage({required this.imageUrl});
+
+  @override
+  State<_ProductImage> createState() => _ProductImageState();
+}
+
+class _ProductImageState extends State<_ProductImage> {
+  BoxFit _fit = BoxFit.fill;
+  // Square (600x600) sources are shown with BoxFit.contain, which leaves
+  // leftover vertical space in this taller-than-square card slot; pinning
+  // that leftover space to the bottom (topCenter) keeps every square cover
+  // flush with the top edge instead of floating centered with uneven gaps.
+  Alignment _alignment = Alignment.center;
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveFit();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _resolveFit();
+    }
+  }
+
+  void _resolveFit() {
+    _stream?.removeListener(_listener!);
+    final stream = CachedNetworkImageProvider(
+      widget.imageUrl,
+    ).resolve(createLocalImageConfiguration(context));
+    final listener = ImageStreamListener((info, synchronousCall) {
+      final width = info.image.width;
+      final height = info.image.height;
+      if (height == 0) return;
+      final isSquare = (width - height).abs() / height < 0.1;
+      // BoxFit.fill for the portrait source would only look right in a slot
+      // whose own aspect ratio happens to match 600x800 -- this card is
+      // reused in layouts with different card proportions (the home row vs.
+      // the category grid), so a slot that doesn't match stretches/distorts
+      // the cover. BoxFit.cover keeps the source's real proportions
+      // (crops any overflow) regardless of the slot shape.
+      final fit = isSquare ? BoxFit.contain : BoxFit.cover;
+      //final fit = isSquare ? BoxFit.contain : BoxFit.cover;
+      final alignment = isSquare ? Alignment.topCenter : Alignment.center;
+      if (mounted && (fit != _fit || alignment != _alignment)) {
+        setState(() {
+          _fit = fit;
+          _alignment = alignment;
+        });
+      }
+    });
+    stream.addListener(listener);
+    _stream = stream;
+    _listener = listener;
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener!);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CachedNetworkImage(
+      imageUrl: widget.imageUrl,
+      fit: _fit,
+      alignment: _alignment,
+      // Grid cards display this at ~170 logical px wide; without a cache
+      // size, the plugin decodes the full source resolution (often several
+      // times larger) into memory for every card, which is the dominant
+      // RAM cost in a long product grid.
+      memCacheWidth: (MediaQuery.of(context).devicePixelRatio * 220).round(),
+      placeholder: (context, url) => const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      errorWidget: (context, url, error) => Icon(
+        Icons.broken_image,
+        color: AppColors.textMuted,
+        size: 42,
       ),
     );
   }

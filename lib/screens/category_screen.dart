@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -306,10 +307,28 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               SliverPadding(
                                 padding: const EdgeInsets.all(16),
                                 sliver: SliverGrid(
+                                  // SliverGridDelegateWithMaxCrossAxisExtent
+                                  // rounds its column count *up* to stay
+                                  // under the extent cap, which -- once
+                                  // padding/spacing are subtracted from the
+                                  // screen width -- often pushes a 2-column
+                                  // fit to 3 columns and shrinks cards well
+                                  // below 170. Computing the column count
+                                  // ourselves with floor() instead guarantees
+                                  // each column is at least 170, matching the
+                                  // home screen's row cards, at the cost of
+                                  // some leftover trailing width on screens
+                                  // that aren't an exact multiple of 170.
                                   gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        childAspectRatio: 0.75,
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: math.max(
+                                          1,
+                                          ((MediaQuery.of(context).size.width -
+                                                      32) /
+                                                  171)
+                                              .floor(),
+                                        ),
+                                        childAspectRatio: 170 / 290,
                                         crossAxisSpacing: 1,
                                         mainAxisSpacing: 1,
                                       ),

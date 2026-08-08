@@ -551,7 +551,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
       return Container(
         width: double.infinity,
         height: 300,
-        color: AppColors.white,
+        color: AppColors.background,
         child: const Icon(
           Icons.image_not_supported,
           size: 88,
@@ -567,7 +567,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
           child: Container(
             width: double.infinity,
             height: 300,
-            color: AppColors.white,
+            color: AppColors.background,
             child: PageView.builder(
               controller: _pageController,
               itemCount: widget.imageUrls.length,
