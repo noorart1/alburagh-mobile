@@ -37,25 +37,25 @@ class CartItemCard extends StatelessWidget {
               borderRadius: AppRadius.smRadius,
               child: image.isEmpty
                   ? Container(
-                      width: 72,
-                      height: 88,
+                      width: 96,
+                      height: 118,
                       color: AppColors.surfaceSoft,
                       child: const Icon(
                         Icons.book_outlined,
-                        size: 32,
+                        size: 40,
                         color: AppColors.textMuted,
                       ),
                     )
                   : CachedNetworkImage(
                       imageUrl: image,
-                      width: 72,
-                      height: 88,
+                      width: 96,
+                      height: 118,
                       fit: BoxFit.cover,
                       errorWidget: (_, _, _) => Container(
                         color: AppColors.surfaceSoft,
                         child: const Icon(
                           Icons.book_outlined,
-                          size: 32,
+                          size: 40,
                           color: AppColors.textMuted,
                         ),
                       ),
