@@ -340,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Text(
                                 'الأقسام',
                                 style: TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 17,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.textPrimary,
                                 ),
@@ -512,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
                 ),
@@ -535,7 +535,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   'المزيد>',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 20,
+                    fontSize: 15,
                     color: AppColors.primary,
                   ),
                 ),
