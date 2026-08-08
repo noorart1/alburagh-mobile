@@ -157,21 +157,81 @@ class ApiService {
   // now too. Matched by slug where the site gives one; "بطاقات اشتراك تطبيق
   // البراق" only has a percent-encoded Arabic slug, so it's matched by name
   // instead.
-  static const _hiddenCategorySlugs = {'uncategorized', 'english-books', 'pdf'};
-  static const _hiddenCategoryNames = {'بطاقات اشتراك تطبيق البراق'};
+  static const _hiddenCategorySlugs = {'uncategorized', 'english-books', 'pdf','all-books',};
+  static const _hiddenCategoryNames = {'بطاقات اشتراك تطبيق البراق','العروض والمفاجآت'};
+
+  // Fixed display order for the app's real merchandising categories.
+  // Anything not listed here (none currently, but a new WooCommerce
+  // category would fall in this bucket) sorts after these, in whatever
+  // order the API returned it.
+  static const _categoryOrder = [
+    'collections',
+    'picture-books',
+    'educational',
+    'religious',
+    'heritage-books',
+    'skills-development',
+    'intellectual-game',
+  ];
+
+  // The site's own category thumbnails (get_categories()'s "image" field)
+  // are unset for all of these -- every one comes back null -- so the app
+  // supplies its own curated image per category instead of showing the
+  // fallback icon everywhere.
+  static const _categoryImages = {
+    'collections':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory1.png',
+    'picture-books':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory2.png',
+    'educational':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory3.png',
+    'religious':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory4.png',
+    'heritage-books':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory5.png',
+    'skills-development':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory6.png',
+    'intellectual-game':
+        'https://alburagh.com/wp-content/uploads/2026/08/catagory7.png',
+  };
 
   Future<List<dynamic>> getCategories() async {
     final response = await _dio.get('categories');
     final categories = response.data is List
         ? List<dynamic>.from(response.data)
         : <dynamic>[];
-    return categories.where((c) {
-      final map = c as Map;
-      final slug = map['slug']?.toString().toLowerCase();
-      final name = map['name']?.toString();
-      return !_hiddenCategorySlugs.contains(slug) &&
-          !_hiddenCategoryNames.contains(name);
-    }).toList();
+
+    final visible = categories
+        .where((c) {
+          final map = c as Map;
+          final slug = map['slug']?.toString().toLowerCase();
+          final name = map['name']?.toString();
+          return !_hiddenCategorySlugs.contains(slug) &&
+              !_hiddenCategoryNames.contains(name);
+        })
+        .map((c) {
+          final map = Map<String, dynamic>.from(c as Map);
+          final image = _categoryImages[map['slug']?.toString().toLowerCase()];
+          if (image != null) {
+            map['image'] = image;
+          }
+          return map;
+        })
+        .toList();
+
+    visible.sort((a, b) {
+      final aRank = _categoryOrder.indexOf(
+        a['slug']?.toString().toLowerCase() ?? '',
+      );
+      final bRank = _categoryOrder.indexOf(
+        b['slug']?.toString().toLowerCase() ?? '',
+      );
+      return (aRank == -1 ? _categoryOrder.length : aRank).compareTo(
+        bRank == -1 ? _categoryOrder.length : bRank,
+      );
+    });
+
+    return visible;
   }
 
   Future<Map<String, dynamic>> registerCustomer({

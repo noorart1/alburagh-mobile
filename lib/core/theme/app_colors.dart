@@ -23,11 +23,15 @@ class AppColors {
   static const Color warning = accentYellow;
   static const Color error = accentRed;
 
+  // accentYellow used to be the 5th color here, but it's nearly identical
+  // to the page's own yellow `background`, so that circle's border
+  // effectively disappeared against it. primary gives real contrast
+  // against the yellow background like the other four accents do.
   static const List<Color> categoryAccents = [
     accentOrange,
     accentGreen,
     accentCyan,
     accentRed,
-    accentYellow,
+    primary,
   ];
 }

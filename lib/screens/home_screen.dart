@@ -347,11 +347,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             SizedBox(
-                              // Was 146 -- too tight for the circle (60 +
-                              // its border padding) plus a 2-line category
-                              // name plus the product-count line below it,
-                              // which overflowed the Column by ~13px.
-                              height: 162,
+                              // Just the circle now (60 + its border) --
+                              // the name/count text below it was removed.
+                              height: 76,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
                                 padding: const EdgeInsets.symmetric(
@@ -416,28 +414,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                       size: 25,
                                                     )
                                                   : null,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          SizedBox(
-                                            width: 75,
-                                            child: Text(
-                                              cat.name,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                                color: AppColors.textPrimary,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          Text(
-                                            '${cat.count} منتج',
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                              color: AppColors.textMuted,
                                             ),
                                           ),
                                         ],

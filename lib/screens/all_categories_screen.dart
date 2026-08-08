@@ -136,72 +136,28 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         );
       },
       child: Card(
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: AppRadius.lgRadius,
-            color: accent.withValues(alpha: 0.08),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (category.imageUrl.isNotEmpty)
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                  child: CachedNetworkImage(
-                    imageUrl: category.imageUrl,
-                    height: 100,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    // Image.network has no disk cache at all -- every time
-                    // this grid was rebuilt (including a pull-to-refresh),
-                    // every category icon was re-downloaded from scratch.
-                    memCacheHeight:
-                        (MediaQuery.of(context).devicePixelRatio * 100)
-                            .round(),
-                    errorWidget: (context, url, error) {
-                      return Container(
-                        height: 100,
-                        color: AppColors.surfaceSoft,
-                        child: Icon(Icons.category, color: accent, size: 40),
-                      );
-                    },
-                  ),
-                )
-              else
-                Container(
-                  height: 80,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgRadius),
+        child: category.imageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: category.imageUrl,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+                // Image.network has no disk cache at all -- every time this
+                // grid was rebuilt (including a pull-to-refresh), every
+                // category icon was re-downloaded from scratch.
+                memCacheWidth: (MediaQuery.of(context).devicePixelRatio * 180)
+                    .round(),
+                errorWidget: (context, url, error) => Container(
                   color: AppColors.surfaceSoft,
                   child: Icon(Icons.category, color: accent, size: 40),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                child: Text(
-                  category.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+              )
+            : Container(
+                color: accent.withValues(alpha: 0.08),
+                child: Icon(Icons.category, color: accent, size: 40),
               ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  '${category.count} منتج',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
