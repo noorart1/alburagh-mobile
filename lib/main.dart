@@ -16,8 +16,8 @@ import 'providers/auth_provider.dart';
 import 'providers/currency_provider.dart';
 import 'providers/wishlist_provider.dart';
 import 'providers/recently_viewed_provider.dart';
-import 'screens/main_screen.dart';
 import 'screens/cart_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,7 +109,7 @@ class MyApp extends StatelessWidget {
           );
         },
         theme: _buildTheme(),
-        home: const MainScreen(),
+        home: const SplashScreen(),
         routes: {'/cart': (context) => const CartScreen()},
         debugShowCheckedModeBanner: false,
       ),

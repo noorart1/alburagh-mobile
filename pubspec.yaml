@@ -73,18 +73,25 @@ flutter_launcher_icons:
 flutter_native_splash:
   color: "#FFFFFF"
   color_dark: "#FFFFFF"
-  image: Assets/splash.jpg
+  image: Assets/icon.png
   android_gravity: center
   ios_content_mode: scaleAspectFit
   android: true
   ios: true
   fullscreen: true
+  # Android 12+'s native SplashScreen API has no full-bleed raw-image mode
+  # at all -- its only image slot (windowSplashScreenAnimatedIcon) is
+  # always rendered small and masked inside an icon-shaped safe zone by
+  # the OS itself, the same constraint adaptive launcher icons have. That
+  # can't be configured away while still using the official API, so this
+  # omits the icon entirely rather than show it masked. Omitting this
+  # whole android_12 block, though, leaves windowSplashScreenBackground
+  # unset, which defaults to black on API31+ (that's a real regression,
+  # not "no image" -- confirmed by testing) -- so color-only config here
+  # to get a plain white background matching the rest of the app instead.
   android_12:
     color: "#FFFFFF"
     color_dark: "#FFFFFF"
-    image: Assets/splash_android12.png
-    icon_background_color: "#FFFFFF"
-    icon_background_color_dark: "#FFFFFF"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

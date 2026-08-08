@@ -434,7 +434,7 @@ class _AdditionalInfoTable extends StatelessWidget {
                   ),
                   child: Text(
                     attribute.name,
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.right,
                     textDirection: TextDirection.rtl,
                     style: const TextStyle(
                       fontSize: 14,

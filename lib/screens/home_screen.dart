@@ -373,48 +373,34 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color:
-                                                    AppColors
-                                                        .categoryAccents[index %
+                                          CircleAvatar(
+                                            radius: 30,
+                                            backgroundColor:
+                                                AppColors.surfaceSoft,
+                                            // CachedNetworkImageProvider
+                                            // (vs. plain NetworkImage) gives
+                                            // this a disk cache, so the same
+                                            // category icon isn't
+                                            // re-downloaded every time the
+                                            // home screen is reopened.
+                                            backgroundImage:
+                                                cat.imageUrl.isNotEmpty
+                                                ? CachedNetworkImageProvider(
+                                                    cat.imageUrl,
+                                                  )
+                                                : null,
+                                            child: cat.imageUrl.isEmpty
+                                                ? Icon(
+                                                    Icons.category,
+                                                    color:
                                                         AppColors
-                                                            .categoryAccents
-                                                            .length],
-                                                width: 2,
-                                              ),
-                                            ),
-                                            child: CircleAvatar(
-                                              radius: 30,
-                                              backgroundColor:
-                                                  AppColors.surfaceSoft,
-                                              // CachedNetworkImageProvider
-                                              // (vs. plain NetworkImage) gives
-                                              // this a disk cache, so the same
-                                              // category icon isn't
-                                              // re-downloaded every time the
-                                              // home screen is reopened.
-                                              backgroundImage:
-                                                  cat.imageUrl.isNotEmpty
-                                                  ? CachedNetworkImageProvider(
-                                                      cat.imageUrl,
-                                                    )
-                                                  : null,
-                                              child: cat.imageUrl.isEmpty
-                                                  ? Icon(
-                                                      Icons.category,
-                                                      color:
-                                                          AppColors
-                                                              .categoryAccents[index %
-                                                              AppColors
-                                                                  .categoryAccents
-                                                                  .length],
-                                                      size: 25,
-                                                    )
-                                                  : null,
-                                            ),
+                                                            .categoryAccents[index %
+                                                            AppColors
+                                                                .categoryAccents
+                                                                .length],
+                                                    size: 25,
+                                                  )
+                                                : null,
                                           ),
                                         ],
                                       ),
