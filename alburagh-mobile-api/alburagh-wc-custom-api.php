@@ -777,6 +777,33 @@ $products[] = $this->format_product($product, $currency);
 return new WP_REST_Response($products, 200);
 }
 
+public function get_random_products($request) {
+$count = $request->get_param('count') ? intval($request->get_param('count')) : 5;
+$exclude = $request->get_param('exclude') ? intval($request->get_param('exclude')) : 0;
+
+$args = array(
+'post_type'      => 'product',
+'posts_per_page' => $count,
+'post_status'    => 'publish',
+'orderby'        => 'rand',
+);
+
+if ($exclude) {
+$args['post__not_in'] = array($exclude);
+}
+
+$query = new WP_Query($args);
+$products = array();
+$currency = $this->currency_from_request($request);
+
+foreach ($query->posts as $post) {
+$product = wc_get_product($post->ID);
+$products[] = $this->format_product($product, $currency);
+}
+
+return new WP_REST_Response($products, 200);
+}
+
 public function get_new_arrivals($request) {
 $args = array(
 'post_type'      => 'product',
@@ -2134,6 +2161,11 @@ register_rest_route('alburagh/v1', '/featured-products', array(
 register_rest_route('alburagh/v1', '/new-arrivals', array(
 'methods' => 'GET',
 'callback' => array($prod, 'get_new_arrivals'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/random-products', array(
+'methods' => 'GET',
+'callback' => array($prod, 'get_random_products'),
 'permission_callback' => '__return_true'
 ));
 register_rest_route('alburagh/v1', '/sale-products', array(

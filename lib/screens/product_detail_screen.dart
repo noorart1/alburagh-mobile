@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -51,22 +49,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       final currency = context.read<CurrencyProvider>().currency;
       // A generic product page, not a per-category endpoint -- "suggested"
-      // here just means "4 random products other than this one", not a
-      // real recommendation engine.
-      final data = await _api.getProducts(
-        page: 1,
-        perPage: 20,
+      // here just means "5 random products other than this one", not a
+      // real recommendation engine. The randomization happens server-side
+      // (ORDER BY RAND() over the whole catalog) so every product has a
+      // chance of showing up, without paginating through the full catalog
+      // client-side.
+      final data = await _api.getRandomProducts(
+        count: 5,
+        exclude: widget.product.id,
         currency: currency,
       );
       if (!mounted) return;
-      final pool =
-          data
-              .map((p) => Product.fromJson(p))
-              .where((p) => p.id != widget.product.id)
-              .toList()
-            ..shuffle(Random());
       setState(() {
-        _suggestedProducts = pool.take(5).toList();
+        _suggestedProducts = data.map((p) => Product.fromJson(p)).toList();
       });
     } catch (_) {
       // Leave _suggestedProducts empty; the section hides itself when empty.

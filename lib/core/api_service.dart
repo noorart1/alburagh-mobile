@@ -104,6 +104,22 @@ class ApiService {
     return response.data is List ? List.from(response.data) : <dynamic>[];
   }
 
+  Future<List<dynamic>> getRandomProducts({
+    int count = 5,
+    int? exclude,
+    String? currency,
+  }) async {
+    final response = await _dio.get(
+      'random-products',
+      queryParameters: {
+        'count': count,
+        'exclude': ?exclude,
+        'currency': ?currency,
+      },
+    );
+    return response.data is List ? List.from(response.data) : <dynamic>[];
+  }
+
   Future<List<dynamic>> getFeaturedProducts({String? currency}) async {
     final response = await _dio.get(
       'featured-products',
