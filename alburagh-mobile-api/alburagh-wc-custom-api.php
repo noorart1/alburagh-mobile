@@ -1068,10 +1068,28 @@ return new WP_REST_Response($banner_images, 200);
 private function format_product($product, $currency = 'USD') {
 $image_ids = $product->get_gallery_image_ids();
 $images = array();
-$featured_src = wp_get_attachment_url($product->get_image_id());
+$featured_id = $product->get_image_id();
+$featured_src = wp_get_attachment_url($featured_id);
 
 if ($featured_src) {
 $images[] = array('id' => 0, 'src' => $featured_src, 'alt' => $product->get_name());
+}
+
+// Listing screens (grid/row cards) only ever display this at ~170-220px,
+// but 'images' above is the full original upload (600x800/600x600) kept
+// for the product detail page's zoomable gallery. Sending that same
+// full-size URL for every card in a scrolling grid means downloading and
+// decoding several-times-larger images than are ever shown. WooCommerce
+// already generates a 'woocommerce_thumbnail' size (300x300 by default)
+// for every product image on upload, so reuse it here instead of a new
+// on-the-fly resize. Falls back to the full src if the registered size
+// wasn't generated (e.g. media uploaded before that size existed and
+// never regenerated).
+$thumbnail_src = $featured_id
+? wp_get_attachment_image_url($featured_id, 'woocommerce_thumbnail')
+: false;
+if (!$thumbnail_src) {
+$thumbnail_src = $featured_src;
 }
 
 foreach ($image_ids as $id) {
@@ -1129,6 +1147,7 @@ return array(
 'stock_status' => $product->get_stock_status(),
 'stock_quantity' => $product->get_stock_quantity(),
 'images' => $images,
+'thumbnail' => $thumbnail_src ? $thumbnail_src : null,
 'categories' => $cats,
 'average_rating' => floatval($product->get_average_rating()),
 'rating_count' => intval($product->get_rating_count()),

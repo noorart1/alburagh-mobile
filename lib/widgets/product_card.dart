@@ -50,13 +50,13 @@ class ProductCard extends StatelessWidget {
                       tag: 'product_${product.id}',
                       child: Container(
                         color: AppColors.white,
-                        child: product.imageUrl.isEmpty
+                        child: product.thumbnailUrl.isEmpty
                             ? Icon(
                                 Icons.image_not_supported,
                                 color: AppColors.textMuted,
                                 size: 42,
                               )
-                            : _ProductImage(imageUrl: product.imageUrl),
+                            : _ProductImage(imageUrl: product.thumbnailUrl),
                       ),
                     ),
                   ),
@@ -238,8 +238,16 @@ class _ProductImageState extends State<_ProductImage> {
       // Grid cards display this at ~170 logical px wide; without a cache
       // size, the plugin decodes the full source resolution (often several
       // times larger) into memory for every card, which is the dominant
-      // RAM cost in a long product grid.
+      // RAM cost in a long product grid. imageUrl is now the backend's
+      // pre-resized thumbnail (~300px), so this mostly just caps decode
+      // size on high-DPI devices rather than downsampling a full original.
       memCacheWidth: (MediaQuery.devicePixelRatioOf(context) * 220).round(),
+      // Also cap what gets written to the on-disk cache, not just the
+      // in-memory decode -- otherwise flutter_cache_manager stores
+      // whatever bytes the server sent (fine now that it's a thumbnail,
+      // but keeps disk usage bounded even if a product falls back to its
+      // full-size original when no thumbnail exists).
+      maxWidthDiskCache: 300,
       // The default 500ms placeholder->image fade costs an AnimatedOpacity
       // per card for every image that enters the viewport during a fling --
       // with dozens of cards streaming in per second while scrolling fast,

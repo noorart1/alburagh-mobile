@@ -22,6 +22,11 @@ class Product {
   final String regularPrice;
   final String imageUrl;
   final List<String> imageUrls;
+  // Server-generated small (~300x300) version of imageUrl, used by grid/row
+  // cards so scrolling a long product list doesn't download and decode the
+  // full-size gallery original for every card. Falls back to imageUrl when
+  // the backend didn't send one (e.g. cached/older payloads).
+  final String thumbnailUrl;
   final String description;
   // The website renders short_description as a bold lead title followed
   // by its body paragraph(s) -- see StringUtils.splitLeadTitle. Empty
@@ -45,6 +50,7 @@ class Product {
     required this.regularPrice,
     required this.imageUrl,
     required this.imageUrls,
+    required this.thumbnailUrl,
     required this.description,
     this.descriptionTitle = '',
     this.descriptionBody = '',
@@ -112,6 +118,9 @@ class Product {
       regularPrice: (json['regular_price'] ?? '0').toString(),
       imageUrl: images.isNotEmpty ? images.first : '',
       imageUrls: images,
+      thumbnailUrl: (json['thumbnail']?.toString().isNotEmpty ?? false)
+          ? json['thumbnail'].toString()
+          : (images.isNotEmpty ? images.first : ''),
       description: description,
       descriptionTitle: parsedDescription.title,
       descriptionBody: parsedDescription.body,
@@ -136,6 +145,7 @@ class Product {
     'price': price,
     'regular_price': regularPrice,
     'images': imageUrls.map((src) => {'src': src}).toList(),
+    'thumbnail': thumbnailUrl,
     'short_description': description,
     'description_title': descriptionTitle,
     'description_body': descriptionBody,
