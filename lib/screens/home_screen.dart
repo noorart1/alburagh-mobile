@@ -7,6 +7,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
 import '../core/currency_utils.dart';
+import '../core/home_data_cache.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/category.dart';
@@ -61,197 +62,33 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _onCurrencyChanged() => loadData();
+  void _onCurrencyChanged() => loadData(forceRefresh: true);
 
-  Category? _findCategoryBy(List<Category> categories, List<String> matches) {
-    final candidates = matches.map((m) => m.toLowerCase()).toSet();
-    for (final cat in categories) {
-      if (candidates.contains(cat.slug?.toLowerCase()) ||
-          candidates.contains(cat.name.toLowerCase())) {
-        return cat;
-      }
+  /// [forceRefresh] bypasses HomeDataCache (used by pull-to-refresh and a
+  /// currency switch, where stale cached data must not be reused). The
+  /// normal path -- first build after app start -- prefers the cache, which
+  /// SplashScreen already started warming before this screen ever appears
+  /// (see splash_screen.dart), so this screen can skip its own loading
+  /// spinner entirely when that preload has already landed.
+  Future<void> loadData({bool forceRefresh = false}) async {
+    final currency = _currencyProvider.currency;
+
+    final cached = forceRefresh ? null : HomeDataCache.peek(currency);
+    if (cached != null) {
+      _applyData(cached);
+    } else if (!forceRefresh) {
+      setState(() => isLoading = true);
     }
-    return null;
-  }
 
-  Future<void> loadData() async {
     try {
-      final currency = _currencyProvider.currency;
-      final catData = await _api.getCategories();
-
+      final data = await HomeDataCache.preload(
+        _api,
+        currency,
+        force: forceRefresh,
+      );
       if (!mounted) return;
-      setState(() {
-        categories = catData.map((c) => Category.fromJson(c)).toList();
-        collectionsCategory = _findCategoryBy(categories, ['collections']);
-        featuredBooksCategory = _findCategoryBy(categories, [
-          'الكتب المصورة',
-          'picture-books',
-        ]);
-        educationalBooksCategory = _findCategoryBy(categories, [
-          'الكتب التعليمية',
-          'educational',
-        ]);
-        intellectualGamesCategory = _findCategoryBy(categories, [
-          'الألعاب التعليمية',
-          'intellectual-game',
-        ]);
-        religiousCategory = _findCategoryBy(categories, [
-          'دينية',
-          'كتب دينية',
-          'الكتب الدينية',
-          'religious',
-          'religious-books',
-        ]);
-        heritageBooksCategory = _findCategoryBy(categories, [
-          'تراثية',
-          'كتب تراثية',
-          'الكتب التراثية',
-          'التراث',
-          'heritage',
-          'heritage-books',
-        ]);
-        skillsDevelopmentCategory = _findCategoryBy(categories, [
-          'مهارات',
-          'تنمية المهارات',
-          'تنمية مهارات',
-          'skills',
-          'skills-development',
-        ]);
-        isLoading = false;
-      });
+      _applyData(data);
 
-      // Same treatment as the other category rows below: secondary section,
-      // loaded after the category list resolves which category id this is.
-      try {
-        final educationalBooksCat = educationalBooksCategory;
-        if (educationalBooksCat != null) {
-          final educationalBooksData = await _api.getProducts(
-            category:
-                educationalBooksCat.slug ?? educationalBooksCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            educationalBooksProducts = educationalBooksData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave educationalBooksProducts as-is; _buildSection hides itself when empty.
-      }
-      try {
-        final intellectualGamesCat = intellectualGamesCategory;
-        if (intellectualGamesCat != null) {
-          final intellectualGamesData = await _api.getProducts(
-            category:
-                intellectualGamesCat.slug ?? intellectualGamesCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            intellectualGamesProducts = intellectualGamesData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave intellectualGamesProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as best-sellers above: secondary section, loaded
-      // after the category list resolves which category id is "Collections".
-      try {
-        final collectionsCat = collectionsCategory;
-        if (collectionsCat != null) {
-          final collectionsData = await _api.getProducts(
-            category: collectionsCat.slug ?? collectionsCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            collectionsProducts = collectionsData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave collectionsProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment: the row should show this category's own products,
-      // matching what its title and "more" button both point to, rather
-      // than the unrelated featured-products list.
-      try {
-        final featuredBooksCat = featuredBooksCategory;
-        if (featuredBooksCat != null) {
-          final featuredBooksData = await _api.getProducts(
-            category: featuredBooksCat.slug ?? featuredBooksCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            featuredBooksProducts = featuredBooksData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave featuredBooksProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as the other secondary sections above.
-      try {
-        final religiousCat = religiousCategory;
-        if (religiousCat != null) {
-          final religiousData = await _api.getProducts(
-            category: religiousCat.slug ?? religiousCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            religiousProducts = religiousData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave religiousProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as the other secondary sections above.
-      try {
-        final heritageBooksCat = heritageBooksCategory;
-        if (heritageBooksCat != null) {
-          final heritageBooksData = await _api.getProducts(
-            category: heritageBooksCat.slug ?? heritageBooksCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            heritageBooksProducts = heritageBooksData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave heritageBooksProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as the other secondary sections above.
-      try {
-        final skillsDevelopmentCat = skillsDevelopmentCategory;
-        if (skillsDevelopmentCat != null) {
-          final skillsDevelopmentData = await _api.getProducts(
-            category:
-                skillsDevelopmentCat.slug ?? skillsDevelopmentCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            skillsDevelopmentProducts = skillsDevelopmentData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave skillsDevelopmentProducts as-is; _buildSection hides itself when empty.
-      }
       // Load cart data after loading products. Do not let a cart failure
       // block the already-loaded home content.
       try {
@@ -261,8 +98,29 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => isLoading = false);
+      if (cached == null) setState(() => isLoading = false);
     }
+  }
+
+  void _applyData(HomeScreenData data) {
+    setState(() {
+      categories = data.categories;
+      collectionsCategory = data.collectionsCategory;
+      collectionsProducts = data.collectionsProducts;
+      featuredBooksCategory = data.featuredBooksCategory;
+      featuredBooksProducts = data.featuredBooksProducts;
+      educationalBooksCategory = data.educationalBooksCategory;
+      educationalBooksProducts = data.educationalBooksProducts;
+      intellectualGamesCategory = data.intellectualGamesCategory;
+      intellectualGamesProducts = data.intellectualGamesProducts;
+      religiousCategory = data.religiousCategory;
+      religiousProducts = data.religiousProducts;
+      heritageBooksCategory = data.heritageBooksCategory;
+      heritageBooksProducts = data.heritageBooksProducts;
+      skillsDevelopmentCategory = data.skillsDevelopmentCategory;
+      skillsDevelopmentProducts = data.skillsDevelopmentProducts;
+      isLoading = false;
+    });
   }
 
   @override
@@ -277,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: isLoading
             ? const SafeArea(child: Center(child: CircularProgressIndicator()))
             : RefreshIndicator(
-                onRefresh: loadData,
+                onRefresh: () => loadData(forceRefresh: true),
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
