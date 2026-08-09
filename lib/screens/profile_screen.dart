@@ -273,8 +273,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           toolbarColor: primaryColor,
           toolbarWidgetColor: Colors.white,
           lockAspectRatio: true,
+          cropStyle: CropStyle.circle,
         ),
-        IOSUiSettings(title: 'اقتصاص الصورة', aspectRatioLockEnabled: true),
+        IOSUiSettings(
+          title: 'اقتصاص الصورة',
+          aspectRatioLockEnabled: true,
+          cropStyle: CropStyle.circle,
+        ),
       ],
     );
     if (cropped == null || !mounted) return;
