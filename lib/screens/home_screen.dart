@@ -7,7 +7,6 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
 import '../core/currency_utils.dart';
-import '../core/home_data_cache.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/category.dart';
@@ -62,33 +61,197 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _onCurrencyChanged() => loadData(forceRefresh: true);
+  void _onCurrencyChanged() => loadData();
 
-  /// [forceRefresh] bypasses HomeDataCache (used by pull-to-refresh and a
-  /// currency switch, where stale cached data must not be reused). The
-  /// normal path -- first build after app start -- prefers the cache, which
-  /// SplashScreen already started warming before this screen ever appears
-  /// (see splash_screen.dart), so this screen can skip its own loading
-  /// spinner entirely when that preload has already landed.
-  Future<void> loadData({bool forceRefresh = false}) async {
-    final currency = _currencyProvider.currency;
-
-    final cached = forceRefresh ? null : HomeDataCache.peek(currency);
-    if (cached != null) {
-      _applyData(cached);
-    } else if (!forceRefresh) {
-      setState(() => isLoading = true);
+  Category? _findCategoryBy(List<Category> categories, List<String> matches) {
+    final candidates = matches.map((m) => m.toLowerCase()).toSet();
+    for (final cat in categories) {
+      if (candidates.contains(cat.slug?.toLowerCase()) ||
+          candidates.contains(cat.name.toLowerCase())) {
+        return cat;
+      }
     }
+    return null;
+  }
 
+  Future<void> loadData() async {
     try {
-      final data = await HomeDataCache.preload(
-        _api,
-        currency,
-        force: forceRefresh,
-      );
-      if (!mounted) return;
-      _applyData(data);
+      final currency = _currencyProvider.currency;
+      final catData = await _api.getCategories();
 
+      if (!mounted) return;
+      setState(() {
+        categories = catData.map((c) => Category.fromJson(c)).toList();
+        collectionsCategory = _findCategoryBy(categories, ['collections']);
+        featuredBooksCategory = _findCategoryBy(categories, [
+          'الكتب المصورة',
+          'picture-books',
+        ]);
+        educationalBooksCategory = _findCategoryBy(categories, [
+          'الكتب التعليمية',
+          'educational',
+        ]);
+        intellectualGamesCategory = _findCategoryBy(categories, [
+          'الألعاب التعليمية',
+          'intellectual-game',
+        ]);
+        religiousCategory = _findCategoryBy(categories, [
+          'دينية',
+          'كتب دينية',
+          'الكتب الدينية',
+          'religious',
+          'religious-books',
+        ]);
+        heritageBooksCategory = _findCategoryBy(categories, [
+          'تراثية',
+          'كتب تراثية',
+          'الكتب التراثية',
+          'التراث',
+          'heritage',
+          'heritage-books',
+        ]);
+        skillsDevelopmentCategory = _findCategoryBy(categories, [
+          'مهارات',
+          'تنمية المهارات',
+          'تنمية مهارات',
+          'skills',
+          'skills-development',
+        ]);
+        isLoading = false;
+      });
+
+      // Same treatment as the other category rows below: secondary section,
+      // loaded after the category list resolves which category id this is.
+      try {
+        final educationalBooksCat = educationalBooksCategory;
+        if (educationalBooksCat != null) {
+          final educationalBooksData = await _api.getProducts(
+            category:
+                educationalBooksCat.slug ?? educationalBooksCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            educationalBooksProducts = educationalBooksData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave educationalBooksProducts as-is; _buildSection hides itself when empty.
+      }
+      try {
+        final intellectualGamesCat = intellectualGamesCategory;
+        if (intellectualGamesCat != null) {
+          final intellectualGamesData = await _api.getProducts(
+            category:
+                intellectualGamesCat.slug ?? intellectualGamesCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            intellectualGamesProducts = intellectualGamesData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave intellectualGamesProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as best-sellers above: secondary section, loaded
+      // after the category list resolves which category id is "Collections".
+      try {
+        final collectionsCat = collectionsCategory;
+        if (collectionsCat != null) {
+          final collectionsData = await _api.getProducts(
+            category: collectionsCat.slug ?? collectionsCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            collectionsProducts = collectionsData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave collectionsProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment: the row should show this category's own products,
+      // matching what its title and "more" button both point to, rather
+      // than the unrelated featured-products list.
+      try {
+        final featuredBooksCat = featuredBooksCategory;
+        if (featuredBooksCat != null) {
+          final featuredBooksData = await _api.getProducts(
+            category: featuredBooksCat.slug ?? featuredBooksCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            featuredBooksProducts = featuredBooksData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave featuredBooksProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as the other secondary sections above.
+      try {
+        final religiousCat = religiousCategory;
+        if (religiousCat != null) {
+          final religiousData = await _api.getProducts(
+            category: religiousCat.slug ?? religiousCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            religiousProducts = religiousData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave religiousProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as the other secondary sections above.
+      try {
+        final heritageBooksCat = heritageBooksCategory;
+        if (heritageBooksCat != null) {
+          final heritageBooksData = await _api.getProducts(
+            category: heritageBooksCat.slug ?? heritageBooksCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            heritageBooksProducts = heritageBooksData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave heritageBooksProducts as-is; _buildSection hides itself when empty.
+      }
+      // Same treatment as the other secondary sections above.
+      try {
+        final skillsDevelopmentCat = skillsDevelopmentCategory;
+        if (skillsDevelopmentCat != null) {
+          final skillsDevelopmentData = await _api.getProducts(
+            category:
+                skillsDevelopmentCat.slug ?? skillsDevelopmentCat.id.toString(),
+            currency: currency,
+          );
+          if (!mounted) return;
+          setState(() {
+            skillsDevelopmentProducts = skillsDevelopmentData
+                .map((p) => Product.fromJson(p))
+                .toList();
+          });
+        }
+      } catch (_) {
+        // Leave skillsDevelopmentProducts as-is; _buildSection hides itself when empty.
+      }
       // Load cart data after loading products. Do not let a cart failure
       // block the already-loaded home content.
       try {
@@ -98,29 +261,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      if (cached == null) setState(() => isLoading = false);
+      setState(() => isLoading = false);
     }
-  }
-
-  void _applyData(HomeScreenData data) {
-    setState(() {
-      categories = data.categories;
-      collectionsCategory = data.collectionsCategory;
-      collectionsProducts = data.collectionsProducts;
-      featuredBooksCategory = data.featuredBooksCategory;
-      featuredBooksProducts = data.featuredBooksProducts;
-      educationalBooksCategory = data.educationalBooksCategory;
-      educationalBooksProducts = data.educationalBooksProducts;
-      intellectualGamesCategory = data.intellectualGamesCategory;
-      intellectualGamesProducts = data.intellectualGamesProducts;
-      religiousCategory = data.religiousCategory;
-      religiousProducts = data.religiousProducts;
-      heritageBooksCategory = data.heritageBooksCategory;
-      heritageBooksProducts = data.heritageBooksProducts;
-      skillsDevelopmentCategory = data.skillsDevelopmentCategory;
-      skillsDevelopmentProducts = data.skillsDevelopmentProducts;
-      isLoading = false;
-    });
   }
 
   @override
@@ -135,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: isLoading
             ? const SafeArea(child: Center(child: CircularProgressIndicator()))
             : RefreshIndicator(
-                onRefresh: () => loadData(forceRefresh: true),
+                onRefresh: loadData,
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
@@ -453,7 +595,7 @@ class _BannerCarouselState extends State<_BannerCarousel> {
   // site must match this ratio or they'll be cropped/squeezed by
   // BoxFit.cover below.
   static const double _imageAspectRatio = 1343 / 571;
-  static const double _viewportFraction = 0.92;
+  static const double _viewportFraction = 1.0;
 
   @override
   void initState() {
@@ -478,105 +620,99 @@ class _BannerCarouselState extends State<_BannerCarousel> {
     if (_bannerImageUrls.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Padding(
-      // Matches the 16px horizontal margin already used by the section
-      // titles and the rest of the home screen's content below the
-      // header, so the banner doesn't sit edge-to-edge while everything
-      // else on the page is inset.
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CarouselSlider.builder(
-            itemCount: _bannerImageUrls.length,
-            options: CarouselOptions(
-              // CarouselOptions.aspectRatio sets the carousel's fixed
-              // HEIGHT as `availableWidth / aspectRatio`, but each item's
-              // own WIDTH is only `availableWidth * viewportFraction`.
-              // Passing the image's raw aspect ratio here made every
-              // item's box relatively taller/narrower than the source
-              // image, so BoxFit.cover below was cropping the left/right
-              // edges of every banner (and any Arabic text baked in near
-              // those edges) to fill that mismatched box. Dividing by
-              // viewportFraction makes the item box's actual ratio match
-              // the image's ratio exactly, so `cover` no longer needs to
-              // crop anything.
-              aspectRatio: _imageAspectRatio / _viewportFraction,
-              autoPlay: true,
-              autoPlayInterval: const Duration(seconds: 4),
-              enlargeCenterPage: true,
-              viewportFraction: _viewportFraction,
-              onPageChanged: (index, reason) {
-                setState(() => _currentBannerIndex = index);
-              },
-            ),
-            itemBuilder: (context, index, realIndex) {
-              return ClipRRect(
-                borderRadius: AppRadius.mdRadius,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: _bannerImageUrls[index],
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: AppColors.surfaceSoft,
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: AppColors.surfaceSoft,
-                        child: const Icon(
-                          Icons.image_not_supported,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ),
-                    // A subtle scrim protects the readability of any text
-                    // near the bottom edge of the promotional artwork
-                    // against busy/bright photo backgrounds, independent
-                    // of what any individual banner image looks like.
-                    IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.28),
-                              Colors.black.withValues(alpha: 0.0),
-                            ],
-                            stops: const [0.0, 0.55],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Computed directly in pixels rather than via CarouselOptions.aspectRatio
+        // (which derives height from width divided by a ratio applied to the
+        // *carousel's* width, not each item's) -- with viewportFraction at 1.0
+        // each item's width already equals the full available width, so this
+        // is just availableWidth / imageAspectRatio, guaranteeing the item
+        // box's ratio matches the source image's exactly. BoxFit.cover then
+        // has nothing to crop or stretch.
+        final bannerHeight = constraints.maxWidth / _imageAspectRatio;
+        return _buildCarousel(bannerHeight);
+      },
+    );
+  }
+
+  Widget _buildCarousel(double bannerHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CarouselSlider.builder(
+          itemCount: _bannerImageUrls.length,
+          options: CarouselOptions(
+            height: bannerHeight,
+            autoPlay: true,
+            autoPlayInterval: const Duration(seconds: 4),
+            viewportFraction: _viewportFraction,
+            onPageChanged: (index, reason) {
+              setState(() => _currentBannerIndex = index);
             },
           ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              _bannerImageUrls.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                width: _currentBannerIndex == index ? 18 : 7,
-                height: 7,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  color: _currentBannerIndex == index
-                      ? AppColors.primary
-                      : AppColors.border,
-                  borderRadius: BorderRadius.circular(999),
+          itemBuilder: (context, index, realIndex) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: _bannerImageUrls[index],
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: AppColors.surfaceSoft,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: AppColors.surfaceSoft,
+                    child: const Icon(
+                      Icons.image_not_supported,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
                 ),
+                // A subtle scrim protects the readability of any text
+                // near the bottom edge of the promotional artwork
+                // against busy/bright photo backgrounds, independent
+                // of what any individual banner image looks like.
+                IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.28),
+                          Colors.black.withValues(alpha: 0.0),
+                        ],
+                        stops: const [0.0, 0.55],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            _bannerImageUrls.length,
+            (index) => AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              width: _currentBannerIndex == index ? 18 : 7,
+              height: 7,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                color: _currentBannerIndex == index
+                    ? AppColors.primary
+                    : AppColors.border,
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
