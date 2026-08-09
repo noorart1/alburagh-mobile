@@ -406,6 +406,7 @@ $email = isset($params['email']) ? sanitize_email($params['email']) : '';
 $password = isset($params['password']) ? $params['password'] : '';
 $first_name = isset($params['first_name']) ? sanitize_text_field($params['first_name']) : '';
 $last_name = isset($params['last_name']) ? sanitize_text_field($params['last_name']) : '';
+$phone = isset($params['phone']) ? sanitize_text_field($params['phone']) : '';
 
 if (empty($username) || empty($email) || empty($password)) {
 return new WP_Error('missing_params', 'Username, email and password are required.', array('status' => 400));
@@ -427,6 +428,16 @@ wp_update_user(array(
 'display_name' => $first_name . ' ' . $last_name
 ));
 
+// WooCommerce checkout reads billing_first_name/billing_phone user meta,
+// not the core WP first_name/last_name fields set above -- see the same
+// note in update_profile(). Without this, a name/phone entered at
+// registration would show in the app but be blank on the website checkout.
+update_user_meta($user_id, 'billing_first_name', $first_name);
+update_user_meta($user_id, 'billing_last_name', $last_name);
+if ($phone !== '') {
+update_user_meta($user_id, 'billing_phone', $phone);
+}
+
 $user = get_user_by('id', $user_id);
 $token = AlBuragh_JWT_Auth::generate_token($user);
 
@@ -440,7 +451,8 @@ return new WP_REST_Response(array(
 'username' => $user->user_login,
 'email' => $user->user_email,
 'first_name' => $first_name,
-'last_name' => $last_name
+'last_name' => $last_name,
+'phone' => $phone
 )
 ), 201);
 }

@@ -904,13 +904,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(color: AppColors.textMuted),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => const RegisterScreen(),
                             ),
                           );
+                          // RegisterScreen pops itself on success, so this
+                          // screen needs to reload after it returns — unlike
+                          // the inline login button above, it can't call
+                          // _loadProfile() directly from a success callback.
+                          if (mounted) _loadProfile();
                         },
                         child: Text(
                           'أنشئ حساباً',
