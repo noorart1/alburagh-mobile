@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -254,14 +255,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final picked = await ImagePicker().pickImage(
       source: source,
-      maxWidth: 800,
-      imageQuality: 85,
+      maxWidth: 1600,
+      imageQuality: 90,
     );
     if (picked == null || !mounted) return;
 
+    // Locked to a 1:1 aspect ratio to match the circular avatar it's
+    // displayed in — an uncropped rectangular photo would otherwise get
+    // squeezed/cropped unpredictably by CircleAvatar itself.
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'اقتصاص الصورة',
+          toolbarColor: primaryColor,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+        ),
+        IOSUiSettings(title: 'اقتصاص الصورة', aspectRatioLockEnabled: true),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
     setState(() => _isUploadingAvatar = true);
     try {
-      final avatarUrl = await _api.uploadAvatar(token, picked.path);
+      final avatarUrl = await _api.uploadAvatar(token, cropped.path);
       if (avatarUrl != null) {
         // Merge into the existing cached profile rather than replacing it,
         // so fields other than the avatar (phone, address, ...) aren't lost.
