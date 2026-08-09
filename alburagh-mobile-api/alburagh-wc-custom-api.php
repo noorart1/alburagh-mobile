@@ -534,12 +534,16 @@ public function get_profile($request) {
     }
 
     // Basic user info
+    $avatar_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
     $profile = [
         'id' => $user->ID,
         'email' => $user->user_email,
         'first_name' => $user->first_name,
         'last_name' => $user->last_name,
         'phone' => get_user_meta($user_id, 'billing_phone', true),
+        // Null (not a Gravatar fallback) when unset, so the app keeps
+        // showing its initial-letter avatar instead of a Gravatar mystery-man.
+        'avatar_url' => $avatar_id ? wp_get_attachment_url($avatar_id) : null,
     ];
 
     // Billing address
@@ -643,6 +647,48 @@ public function update_profile($request) {
     }
 
     return $this->get_profile($request);
+}
+
+// Accepts a multipart/form-data POST with a single 'avatar' file field.
+// Stores it in the media library (unattached, like other profile-only
+// uploads with no parent post) and keeps only the latest one per user --
+// otherwise every re-upload would leave the previous photo behind as an
+// orphaned attachment.
+public function upload_avatar($request) {
+    $auth_header = $request->get_header('Authorization');
+    if (empty($auth_header)) {
+        return new WP_Error('unauthorized', 'Token missing.', array('status' => 401));
+    }
+
+    $token = str_replace('Bearer ', '', $auth_header);
+    $user_id = AlBuragh_JWT_Auth::validate_token($token);
+    if (!$user_id) {
+        return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
+    }
+
+    $files = $request->get_file_params();
+    if (empty($files['avatar']) || $files['avatar']['error'] !== UPLOAD_ERR_OK) {
+        return new WP_Error('missing_file', 'No image file uploaded.', array('status' => 400));
+    }
+
+    if (!function_exists('media_handle_upload')) {
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+    }
+
+    $attachment_id = media_handle_upload('avatar', 0);
+    if (is_wp_error($attachment_id)) {
+        return new WP_Error('upload_failed', $attachment_id->get_error_message(), array('status' => 500));
+    }
+
+    $old_attachment_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
+    if ($old_attachment_id && $old_attachment_id != $attachment_id) {
+        wp_delete_attachment($old_attachment_id, true);
+    }
+    update_user_meta($user_id, 'alburagh_avatar_id', $attachment_id);
+
+    return new WP_REST_Response(array('avatar_url' => wp_get_attachment_url($attachment_id)), 200);
 }
 }
 
@@ -2066,6 +2112,11 @@ register_rest_route('alburagh/v1', '/profile', array(
 register_rest_route('alburagh/v1', '/profile', array(
 'methods' => 'PUT',
 'callback' => array($auth, 'update_profile'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/avatar', array(
+'methods' => 'POST',
+'callback' => array($auth, 'upload_avatar'),
 'permission_callback' => '__return_true'
 ));
 

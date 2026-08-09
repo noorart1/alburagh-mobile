@@ -324,6 +324,21 @@ class ApiService {
         : <String, dynamic>{};
   }
 
+  /// Uploads a new profile photo and returns its public URL. The server
+  /// stores it in the WordPress media library and replaces whatever avatar
+  /// the account had before, so only the latest photo is ever kept there.
+  Future<String?> uploadAvatar(String token, String filePath) async {
+    final response = await _dio.post(
+      'avatar',
+      data: FormData.fromMap({
+        'avatar': await MultipartFile.fromFile(filePath),
+      }),
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    final data = response.data;
+    return data is Map ? data['avatar_url']?.toString() : null;
+  }
+
   /// Requests a short-lived, single-use login link so the customer can be
   /// sent to [redirectTo] on the real website already logged in there,
   /// instead of having to sign in a second time in the browser.

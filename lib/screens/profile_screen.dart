@@ -1,5 +1,7 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -52,6 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isUploadingAvatar = false;
 
   // Login form controllers
   final _loginEmailController = TextEditingController();
@@ -221,6 +224,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(errorMessage ?? 'تم حفظ معلومات الحساب')),
     );
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    final authProvider = context.read<AuthProvider>();
+    final token = authProvider.user?.token;
+    if (token == null) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('اختيار من المعرض'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('التقاط صورة'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 800,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _isUploadingAvatar = true);
+    try {
+      final avatarUrl = await _api.uploadAvatar(token, picked.path);
+      if (avatarUrl != null) {
+        // Merge into the existing cached profile rather than replacing it,
+        // so fields other than the avatar (phone, address, ...) aren't lost.
+        authProvider.setProfile({
+          ...?authProvider.profile,
+          'avatar_url': avatarUrl,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('فشل رفع الصورة: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingAvatar = false);
+    }
   }
 
   Future<void> _clearProfile() async {
@@ -408,6 +466,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             name: _displayName,
             subtitle: _subtitle,
             initial: _initial,
+            avatarUrl: authProvider.profile?['avatar_url']?.toString(),
+            isUploadingAvatar: _isUploadingAvatar,
+            onEditAvatar: _pickAndUploadAvatar,
           ),
           const SizedBox(height: 16),
           _CartSummary(
@@ -943,11 +1004,17 @@ class _ProfileHeader extends StatelessWidget {
   final String name;
   final String subtitle;
   final String initial;
+  final String? avatarUrl;
+  final bool isUploadingAvatar;
+  final VoidCallback onEditAvatar;
 
   const _ProfileHeader({
     required this.name,
     required this.subtitle,
     required this.initial,
+    required this.avatarUrl,
+    required this.isUploadingAvatar,
+    required this.onEditAvatar,
   });
 
   @override
@@ -960,16 +1027,61 @@ class _ProfileHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: Colors.white,
-            child: Text(
-              initial,
-              style: const TextStyle(
-                color: primaryColor,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+          GestureDetector(
+            onTap: isUploadingAvatar ? null : onEditAvatar,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CircleAvatar(
+                  radius: 34,
+                  backgroundColor: Colors.white,
+                  backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                      ? CachedNetworkImageProvider(avatarUrl!)
+                      : null,
+                  child: (avatarUrl == null || avatarUrl!.isEmpty)
+                      ? Text(
+                          initial,
+                          style: const TextStyle(
+                            color: primaryColor,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
+                if (isUploadingAvatar)
+                  const Positioned.fill(
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black45,
+                      child: SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  bottom: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      size: 16,
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 14),
