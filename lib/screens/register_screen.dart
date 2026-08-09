@@ -251,11 +251,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
-                        child: const Text(
-                          'تسجيل الدخول',
-                          style: TextStyle(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
                             color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'تسجيل الدخول',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),

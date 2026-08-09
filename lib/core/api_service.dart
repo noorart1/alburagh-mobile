@@ -234,6 +234,16 @@ class ApiService {
     return visible;
   }
 
+  /// Fetches the home screen banner image URLs from the custom plugin's
+  /// `/banners` endpoint. The URLs live server-side (in the plugin's
+  /// `get_banners()`) so they can be changed by deploying the plugin,
+  /// without shipping an app update.
+  Future<List<String>> getBannerImageUrls() async {
+    final response = await _dio.get('banners');
+    final data = response.data;
+    return data is List ? data.map((e) => e.toString()).toList() : [];
+  }
+
   Future<Map<String, dynamic>> registerCustomer({
     required String email,
     required String password,

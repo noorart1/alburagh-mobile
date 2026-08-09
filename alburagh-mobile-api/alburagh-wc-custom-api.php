@@ -957,6 +957,29 @@ $categories[] = array(
 return new WP_REST_Response($categories, 200);
 }
 
+// Home screen banner carousel. URLs are read from banners.json next to this
+// plugin file (not a WooCommerce media query), so they can be
+// reordered/added/removed by editing that JSON file alone -- no PHP change
+// or app release needed, since the Flutter app fetches this endpoint at
+// runtime instead of bundling the URLs.
+public function get_banners($request) {
+$fallback = array(
+'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh2.webp',
+'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh3.webp',
+'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh1.webp',
+);
+
+$json_path = plugin_dir_path(__FILE__) . 'banners.json';
+if (!file_exists($json_path)) {
+return new WP_REST_Response($fallback, 200);
+}
+
+$decoded = json_decode(file_get_contents($json_path), true);
+$banner_images = is_array($decoded) ? array_values($decoded) : $fallback;
+
+return new WP_REST_Response($banner_images, 200);
+}
+
 private function format_product($product, $currency = 'USD') {
 $image_ids = $product->get_gallery_image_ids();
 $images = array();
@@ -2068,6 +2091,11 @@ register_rest_route('alburagh/v1', '/search', array(
 register_rest_route('alburagh/v1', '/categories', array(
 'methods' => 'GET',
 'callback' => array($prod, 'get_categories'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/banners', array(
+'methods' => 'GET',
+'callback' => array($prod, 'get_banners'),
 'permission_callback' => '__return_true'
 ));
 

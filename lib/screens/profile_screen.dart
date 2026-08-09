@@ -734,13 +734,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Container(
               height: 220,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [primaryColor, primaryColor.withValues(alpha: 0.7)],
-                ),
-              ),
+              color: primaryColor,
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

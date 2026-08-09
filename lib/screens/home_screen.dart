@@ -583,20 +583,43 @@ class _BannerCarousel extends StatefulWidget {
 class _BannerCarouselState extends State<_BannerCarousel> {
   int _currentBannerIndex = 0;
 
-  static const List<String> _bannerImageUrls = [
-    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh2.webp',
-    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh3.webp',
-    'https://alburagh.com/wp-content/uploads/2024/10/slayd-alburagh1.webp',
-  ];
+  // Empty until the live list arrives from the /banners endpoint; the
+  // carousel renders nothing (see build below) while empty, whether
+  // that's during the initial load or because the fetch failed.
+  List<String> _bannerImageUrls = [];
+  final ApiService _api = ApiService();
 
   // The banner images' own pixel proportions (used below to derive the
   // carousel's aspect ratio so nothing gets cropped -- see the comment
-  // on `aspectRatio` in CarouselOptions).
+  // on `aspectRatio` in CarouselOptions). New banners uploaded to the
+  // site must match this ratio or they'll be cropped/squeezed by
+  // BoxFit.cover below.
   static const double _imageAspectRatio = 1343 / 571;
   static const double _viewportFraction = 0.92;
 
   @override
+  void initState() {
+    super.initState();
+    _loadBannerImages();
+  }
+
+  Future<void> _loadBannerImages() async {
+    try {
+      final urls = await _api.getBannerImageUrls();
+      if (mounted && urls.isNotEmpty) {
+        setState(() => _bannerImageUrls = urls);
+      }
+    } catch (_) {
+      // Leave the list empty; build() below renders nothing rather than
+      // showing an error for a promotional banner.
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_bannerImageUrls.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       // Matches the 16px horizontal margin already used by the section
       // titles and the rest of the home screen's content below the
