@@ -343,11 +343,22 @@ class ApiService {
   /// Uploads a new profile photo and returns its public URL. The server
   /// stores it in the WordPress media library and replaces whatever avatar
   /// the account had before, so only the latest photo is ever kept there.
-  Future<String?> uploadAvatar(String token, String filePath) async {
+  ///
+  /// [presetKey] identifies one of the app's bundled "ready avatar" images
+  /// (omit for camera/gallery photos). The server keeps one shared media
+  /// attachment per preset key across all accounts — the first upload of a
+  /// given preset creates it, every account after that is pointed at the
+  /// same attachment instead of the file being stored again.
+  Future<String?> uploadAvatar(
+    String token,
+    String filePath, {
+    String? presetKey,
+  }) async {
     final response = await _dio.post(
       'avatar',
       data: FormData.fromMap({
         'avatar': await MultipartFile.fromFile(filePath),
+        if (presetKey != null) 'preset_key': presetKey,
       }),
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );

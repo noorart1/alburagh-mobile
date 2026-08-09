@@ -649,11 +649,20 @@ public function update_profile($request) {
     return $this->get_profile($request);
 }
 
-// Accepts a multipart/form-data POST with a single 'avatar' file field.
-// Stores it in the media library (unattached, like other profile-only
-// uploads with no parent post) and keeps only the latest one per user --
-// otherwise every re-upload would leave the previous photo behind as an
-// orphaned attachment.
+// Accepts a multipart/form-data POST with a single 'avatar' file field, and
+// an optional 'preset_key' field for the app's built-in "ready avatar"
+// presets. Stores the file in the media library (unattached, like other
+// profile-only uploads with no parent post).
+//
+// Non-preset (camera/gallery) uploads keep only the latest one per user, as
+// before -- otherwise every re-upload would leave the previous photo behind
+// as an orphaned attachment. Preset uploads are different: many users pick
+// the same built-in image, so instead of storing a fresh copy per user, the
+// first person to pick a given preset creates the attachment and its id is
+// cached in the 'alburagh_ready_avatar_ids' option keyed by preset_key;
+// everyone else who picks that same preset is pointed at that one shared
+// attachment. Shared attachments are therefore never deleted here even when
+// a user switches away from one, since other users may still reference it.
 public function upload_avatar($request) {
     $auth_header = $request->get_header('Authorization');
     if (empty($auth_header)) {
@@ -666,24 +675,42 @@ public function upload_avatar($request) {
         return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
     }
 
-    $files = $request->get_file_params();
-    if (empty($files['avatar']) || $files['avatar']['error'] !== UPLOAD_ERR_OK) {
-        return new WP_Error('missing_file', 'No image file uploaded.', array('status' => 400));
+    $preset_key = sanitize_key((string) $request->get_param('preset_key'));
+    $preset_map = get_option('alburagh_ready_avatar_ids', array());
+    if (!is_array($preset_map)) {
+        $preset_map = array();
     }
 
-    if (!function_exists('media_handle_upload')) {
-        require_once(ABSPATH . 'wp-admin/includes/file.php');
-        require_once(ABSPATH . 'wp-admin/includes/media.php');
-        require_once(ABSPATH . 'wp-admin/includes/image.php');
-    }
+    if ($preset_key !== '' && isset($preset_map[$preset_key])) {
+        // Already uploaded by some user before -- reuse the shared
+        // attachment instead of storing another copy of the same image.
+        $attachment_id = (int) $preset_map[$preset_key];
+    } else {
+        $files = $request->get_file_params();
+        if (empty($files['avatar']) || $files['avatar']['error'] !== UPLOAD_ERR_OK) {
+            return new WP_Error('missing_file', 'No image file uploaded.', array('status' => 400));
+        }
 
-    $attachment_id = media_handle_upload('avatar', 0);
-    if (is_wp_error($attachment_id)) {
-        return new WP_Error('upload_failed', $attachment_id->get_error_message(), array('status' => 500));
+        if (!function_exists('media_handle_upload')) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+            require_once(ABSPATH . 'wp-admin/includes/media.php');
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+        }
+
+        $attachment_id = media_handle_upload('avatar', 0);
+        if (is_wp_error($attachment_id)) {
+            return new WP_Error('upload_failed', $attachment_id->get_error_message(), array('status' => 500));
+        }
+
+        if ($preset_key !== '') {
+            $preset_map[$preset_key] = $attachment_id;
+            update_option('alburagh_ready_avatar_ids', $preset_map);
+        }
     }
 
     $old_attachment_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
-    if ($old_attachment_id && $old_attachment_id != $attachment_id) {
+    $old_is_shared_preset = $old_attachment_id && in_array((int) $old_attachment_id, array_map('intval', $preset_map), true);
+    if ($old_attachment_id && $old_attachment_id != $attachment_id && !$old_is_shared_preset) {
         wp_delete_attachment($old_attachment_id, true);
     }
     update_user_meta($user_id, 'alburagh_avatar_id', $attachment_id);
