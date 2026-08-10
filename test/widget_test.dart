@@ -6,7 +6,9 @@ void main() {
   testWidgets('app renders its primary navigation', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp(initialCurrency: 'USD'));
+    await tester.pumpWidget(
+      const MyApp(initialCurrency: 'USD', showSplashLogo: true),
+    );
 
     expect(find.text('الرئيسية'), findsOneWidget);
     expect(find.text('الأقسام'), findsOneWidget);

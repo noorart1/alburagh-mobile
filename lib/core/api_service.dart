@@ -340,26 +340,38 @@ class ApiService {
         : <String, dynamic>{};
   }
 
-  /// Uploads a new profile photo and returns its public URL. The server
-  /// stores it in the WordPress media library and replaces whatever avatar
-  /// the account had before, so only the latest photo is ever kept there.
-  ///
-  /// [presetKey] identifies one of the app's bundled "ready avatar" images
-  /// (omit for camera/gallery photos). The server keeps one shared media
-  /// attachment per preset key across all accounts — the first upload of a
-  /// given preset creates it, every account after that is pointed at the
-  /// same attachment instead of the file being stored again.
-  Future<String?> uploadAvatar(
-    String token,
-    String filePath, {
-    String? presetKey,
-  }) async {
+  /// Uploads a new profile photo (camera/gallery) and returns its public
+  /// URL. The server stores it in the WordPress media library and replaces
+  /// whatever avatar the account had before, so only the latest photo is
+  /// ever kept there.
+  Future<String?> uploadAvatar(String token, String filePath) async {
     final response = await _dio.post(
       'avatar',
       data: FormData.fromMap({
         'avatar': await MultipartFile.fromFile(filePath),
-        if (presetKey != null) 'preset_key': presetKey,
       }),
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    final data = response.data;
+    return data is Map ? data['avatar_url']?.toString() : null;
+  }
+
+  /// The app's built-in "ready avatar" picker images -- static files hosted
+  /// on the server (not bundled into the app), listed server-side so new
+  /// ones can be added without an app update.
+  Future<List<String>> getReadyAvatars() async {
+    final response = await _dio.get('avatars');
+    final data = response.data;
+    return data is List ? data.map((e) => e.toString()).toList() : [];
+  }
+
+  /// Points the account's avatar at one of the ready-avatar URLs from
+  /// [getReadyAvatars] and returns it back. Unlike [uploadAvatar], no file
+  /// is sent -- the image already lives on the server.
+  Future<String?> setPresetAvatar(String token, String presetUrl) async {
+    final response = await _dio.post(
+      'avatar',
+      data: {'preset_url': presetUrl},
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
     final data = response.data;

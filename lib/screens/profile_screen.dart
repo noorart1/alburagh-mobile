@@ -1,12 +1,8 @@
-import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -61,42 +57,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSaving = false;
   bool _isUploadingAvatar = false;
 
-  // Bundled preset avatars a user can pick instead of uploading their own
-  // photo (Assets/readyavatars/), listed here since Flutter has no API to
-  // enumerate an asset directory at runtime.
-  static const _readyAvatarAssets = [
-    'Assets/readyavatars/Boy.png',
-    'Assets/readyavatars/arab-man.png',
-    'Assets/readyavatars/bear.png',
-    'Assets/readyavatars/boy (1).png',
-    'Assets/readyavatars/businessman.png',
-    'Assets/readyavatars/cat.png',
-    'Assets/readyavatars/chick (1).png',
-    'Assets/readyavatars/chick.png',
-    'Assets/readyavatars/cool.png',
-    'Assets/readyavatars/duck.png',
-    'Assets/readyavatars/hen.png',
-    'Assets/readyavatars/human.png',
-    'Assets/readyavatars/man (1).png',
-    'Assets/readyavatars/man (2).png',
-    'Assets/readyavatars/man (3).png',
-    'Assets/readyavatars/man.png',
-    'Assets/readyavatars/moslem-woman.png',
-    'Assets/readyavatars/owl.png',
-    'Assets/readyavatars/panda.png',
-    'Assets/readyavatars/profile.png',
-    'Assets/readyavatars/rabbit.png',
-    'Assets/readyavatars/shark.png',
-    'Assets/readyavatars/tiger.png',
-    'Assets/readyavatars/user (1).png',
-    'Assets/readyavatars/user.png',
-    'Assets/readyavatars/wolf.png',
-    'Assets/readyavatars/woman (1).png',
-    'Assets/readyavatars/woman (2).png',
-    'Assets/readyavatars/woman (3).png',
-    'Assets/readyavatars/woman.png',
-    'Assets/readyavatars/womans (1).png',
-  ];
+  // Preset avatars a user can pick instead of uploading their own photo,
+  // fetched from the server (see ApiService.getReadyAvatars) rather than
+  // bundled into the app. Cached after the first fetch for the lifetime of
+  // this screen; null means not fetched yet.
+  List<String>? _readyAvatarUrls;
 
   // Login form controllers
   final _loginEmailController = TextEditingController();
@@ -337,7 +302,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickReadyAvatar() async {
-    final assetPath = await showModalBottomSheet<String>(
+    var avatars = _readyAvatarUrls;
+    if (avatars == null) {
+      try {
+        avatars = await _api.getReadyAvatars();
+        if (!mounted) return;
+        setState(() => _readyAvatarUrls = avatars);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('فشل تحميل الافاتارات: $e')));
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
+
+    final selectedUrl = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       builder: (context) => SafeArea(
@@ -355,19 +337,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SizedBox(
                 height: 320,
                 child: GridView.builder(
-                  itemCount: _readyAvatarAssets.length,
+                  itemCount: avatars!.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                   ),
                   itemBuilder: (context, index) {
-                    final path = _readyAvatarAssets[index];
+                    final url = avatars![index];
                     return GestureDetector(
-                      onTap: () => Navigator.pop(context, path),
+                      onTap: () => Navigator.pop(context, url),
                       child: CircleAvatar(
                         backgroundColor: AppColors.surfaceSoft,
-                        backgroundImage: AssetImage(path),
+                        backgroundImage: CachedNetworkImageProvider(url),
                       ),
                     );
                   },
@@ -378,44 +360,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
-    if (assetPath == null || !mounted) return;
+    if (selectedUrl == null || !mounted) return;
 
-    // Ready avatars are bundled assets, not files on disk, so they're
-    // copied to a temp file first to reuse the same upload endpoint (and
-    // therefore the same avatar_url display path) as camera/gallery photos.
-    // The preset_key is sent so the server can dedup: it keeps one shared
-    // media attachment per preset across every account rather than storing
-    // a fresh copy of the same built-in image for every user who picks it.
-    final bytes = await rootBundle.load(assetPath);
-    final tempDir = await getTemporaryDirectory();
-    final tempFile = File(
-      '${tempDir.path}/ready_avatar_${DateTime.now().millisecondsSinceEpoch}.png',
-    );
-    await tempFile.writeAsBytes(bytes.buffer.asUint8List());
-
-    await _uploadAvatarFile(tempFile.path, presetKey: _presetKeyForAsset(assetPath));
+    await _setPresetAvatar(selectedUrl);
   }
 
-  String _presetKeyForAsset(String assetPath) {
-    final fileName = assetPath.split('/').last.split('.').first;
-    return fileName
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-  }
-
-  Future<String?> _uploadAvatarFile(String filePath, {String? presetKey}) async {
+  Future<String?> _setPresetAvatar(String presetUrl) async {
     final authProvider = context.read<AuthProvider>();
     final token = authProvider.user?.token;
     if (token == null) return null;
 
     setState(() => _isUploadingAvatar = true);
     try {
-      final avatarUrl = await _api.uploadAvatar(
-        token,
-        filePath,
-        presetKey: presetKey,
-      );
+      final avatarUrl = await _api.setPresetAvatar(token, presetUrl);
+      if (avatarUrl != null) {
+        authProvider.setProfile({
+          ...?authProvider.profile,
+          'avatar_url': avatarUrl,
+        });
+      }
+      return avatarUrl;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('فشل تعيين الصورة: $e')));
+      }
+      return null;
+    } finally {
+      if (mounted) setState(() => _isUploadingAvatar = false);
+    }
+  }
+
+  Future<String?> _uploadAvatarFile(String filePath) async {
+    final authProvider = context.read<AuthProvider>();
+    final token = authProvider.user?.token;
+    if (token == null) return null;
+
+    setState(() => _isUploadingAvatar = true);
+    try {
+      final avatarUrl = await _api.uploadAvatar(token, filePath);
       if (avatarUrl != null) {
         // Merge into the existing cached profile rather than replacing it,
         // so fields other than the avatar (phone, address, ...) aren't lost.

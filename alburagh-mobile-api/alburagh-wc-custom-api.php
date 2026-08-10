@@ -534,6 +534,12 @@ public function get_profile($request) {
     }
 
     // Basic user info
+    // alburagh_avatar_url (a ready-avatar pick -- see /avatars, a plain
+    // hosted URL, not a WP media attachment) takes priority over
+    // alburagh_avatar_id (an actual camera/gallery upload) since only one
+    // of the two is ever current at a time -- see upload_avatar(), which
+    // clears whichever one it isn't setting.
+    $avatar_url_meta = get_user_meta($user_id, 'alburagh_avatar_url', true);
     $avatar_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
     $profile = [
         'id' => $user->ID,
@@ -543,7 +549,7 @@ public function get_profile($request) {
         'phone' => get_user_meta($user_id, 'billing_phone', true),
         // Null (not a Gravatar fallback) when unset, so the app keeps
         // showing its initial-letter avatar instead of a Gravatar mystery-man.
-        'avatar_url' => $avatar_id ? wp_get_attachment_url($avatar_id) : null,
+        'avatar_url' => $avatar_url_meta ?: ($avatar_id ? wp_get_attachment_url($avatar_id) : null),
     ];
 
     // Billing address
@@ -649,20 +655,19 @@ public function update_profile($request) {
     return $this->get_profile($request);
 }
 
-// Accepts a multipart/form-data POST with a single 'avatar' file field, and
-// an optional 'preset_key' field for the app's built-in "ready avatar"
-// presets. Stores the file in the media library (unattached, like other
-// profile-only uploads with no parent post).
+// Accepts either:
+// - a multipart/form-data POST with a single 'avatar' file field (camera/
+//   gallery photo) -- stored in the media library (unattached, like other
+//   profile-only uploads with no parent post), replacing whatever attachment
+//   the account had before so only the latest photo is ever kept there; or
+// - a 'preset_url' field (a URL from GET /avatars, one of the app's
+//   built-in "ready avatar" images, already hosted as a static file --
+//   not a WP media attachment) -- just points the account at that URL
+//   directly, no file transfer or attachment involved.
 //
-// Non-preset (camera/gallery) uploads keep only the latest one per user, as
-// before -- otherwise every re-upload would leave the previous photo behind
-// as an orphaned attachment. Preset uploads are different: many users pick
-// the same built-in image, so instead of storing a fresh copy per user, the
-// first person to pick a given preset creates the attachment and its id is
-// cached in the 'alburagh_ready_avatar_ids' option keyed by preset_key;
-// everyone else who picks that same preset is pointed at that one shared
-// attachment. Shared attachments are therefore never deleted here even when
-// a user switches away from one, since other users may still reference it.
+// Exactly one of the two avatar_url sources -- the ready-avatar meta or the
+// uploaded attachment -- is ever current for an account at a time, so
+// setting one here always clears the other (see get_profile()).
 public function upload_avatar($request) {
     $auth_header = $request->get_header('Authorization');
     if (empty($auth_header)) {
@@ -675,45 +680,40 @@ public function upload_avatar($request) {
         return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
     }
 
-    $preset_key = sanitize_key((string) $request->get_param('preset_key'));
-    $preset_map = get_option('alburagh_ready_avatar_ids', array());
-    if (!is_array($preset_map)) {
-        $preset_map = array();
+    $preset_url = esc_url_raw((string) $request->get_param('preset_url'));
+
+    if ($preset_url !== '') {
+        $old_attachment_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
+        if ($old_attachment_id) {
+            wp_delete_attachment($old_attachment_id, true);
+            delete_user_meta($user_id, 'alburagh_avatar_id');
+        }
+        update_user_meta($user_id, 'alburagh_avatar_url', $preset_url);
+        return new WP_REST_Response(array('avatar_url' => $preset_url), 200);
     }
 
-    if ($preset_key !== '' && isset($preset_map[$preset_key])) {
-        // Already uploaded by some user before -- reuse the shared
-        // attachment instead of storing another copy of the same image.
-        $attachment_id = (int) $preset_map[$preset_key];
-    } else {
-        $files = $request->get_file_params();
-        if (empty($files['avatar']) || $files['avatar']['error'] !== UPLOAD_ERR_OK) {
-            return new WP_Error('missing_file', 'No image file uploaded.', array('status' => 400));
-        }
+    $files = $request->get_file_params();
+    if (empty($files['avatar']) || $files['avatar']['error'] !== UPLOAD_ERR_OK) {
+        return new WP_Error('missing_file', 'No image file uploaded.', array('status' => 400));
+    }
 
-        if (!function_exists('media_handle_upload')) {
-            require_once(ABSPATH . 'wp-admin/includes/file.php');
-            require_once(ABSPATH . 'wp-admin/includes/media.php');
-            require_once(ABSPATH . 'wp-admin/includes/image.php');
-        }
+    if (!function_exists('media_handle_upload')) {
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+    }
 
-        $attachment_id = media_handle_upload('avatar', 0);
-        if (is_wp_error($attachment_id)) {
-            return new WP_Error('upload_failed', $attachment_id->get_error_message(), array('status' => 500));
-        }
-
-        if ($preset_key !== '') {
-            $preset_map[$preset_key] = $attachment_id;
-            update_option('alburagh_ready_avatar_ids', $preset_map);
-        }
+    $attachment_id = media_handle_upload('avatar', 0);
+    if (is_wp_error($attachment_id)) {
+        return new WP_Error('upload_failed', $attachment_id->get_error_message(), array('status' => 500));
     }
 
     $old_attachment_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
-    $old_is_shared_preset = $old_attachment_id && in_array((int) $old_attachment_id, array_map('intval', $preset_map), true);
-    if ($old_attachment_id && $old_attachment_id != $attachment_id && !$old_is_shared_preset) {
+    if ($old_attachment_id && $old_attachment_id != $attachment_id) {
         wp_delete_attachment($old_attachment_id, true);
     }
     update_user_meta($user_id, 'alburagh_avatar_id', $attachment_id);
+    delete_user_meta($user_id, 'alburagh_avatar_url');
 
     return new WP_REST_Response(array('avatar_url' => wp_get_attachment_url($attachment_id)), 200);
 }
@@ -2204,6 +2204,20 @@ register_rest_route('alburagh/v1', '/profile', array(
 register_rest_route('alburagh/v1', '/avatar', array(
 'methods' => 'POST',
 'callback' => array($auth, 'upload_avatar'),
+'permission_callback' => '__return_true'
+));
+// The app's built-in "ready avatar" picker -- a plain list of static image
+// URLs (not WP media attachments) hosted directly on the site. Kept in a
+// JSON file next to this plugin file rather than hardcoded here so new
+// avatars can be added by editing/uploading just that file, no PHP change
+// or app update needed.
+register_rest_route('alburagh/v1', '/avatars', array(
+'methods' => 'GET',
+'callback' => function () {
+$path = __DIR__ . '/avatars.json';
+$urls = file_exists($path) ? json_decode(file_get_contents($path), true) : array();
+return new WP_REST_Response(is_array($urls) ? array_values($urls) : array(), 200);
+},
 'permission_callback' => '__return_true'
 ));
 
