@@ -26,6 +26,13 @@ class WishlistProvider with ChangeNotifier {
 
   bool isWishlisted(int productId) => _items.any((p) => p.id == productId);
 
+  // Bumped on every loadWishlist() call so a slow, stale request (e.g. one
+  // still in flight for the previous account at logout/login time) can tell
+  // it's no longer the latest and skip applying its response -- otherwise an
+  // out-of-order response can land after a newer account's own (correct)
+  // load and silently overwrite it with the wrong account's items.
+  int _requestId = 0;
+
   void setCurrency(String currency) {
     if (_currency == currency) return;
     _currency = currency;
@@ -33,12 +40,15 @@ class WishlistProvider with ChangeNotifier {
   }
 
   Future<void> loadWishlist() async {
+    final requestId = ++_requestId;
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final data = await _apiService.getWishlist(currency: _currency);
+      if (requestId != _requestId) return;
+
       final rawItems = data['items'] as List<dynamic>? ?? [];
       _items.clear();
 
@@ -52,6 +62,7 @@ class WishlistProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      if (requestId != _requestId) return;
       _isLoading = false;
       _error = 'فشل تحميل المفضلة: ${_describe(e)}';
       notifyListeners();
@@ -66,6 +77,8 @@ class WishlistProvider with ChangeNotifier {
   }
 
   Future<bool> addToWishlist(Product product) async {
+    final requestId = _requestId;
+
     try {
       _error = null;
       _items.add(product);
@@ -76,6 +89,10 @@ class WishlistProvider with ChangeNotifier {
       );
       return true;
     } catch (e) {
+      // If logout/loadWishlist has moved on to a new account since this
+      // call started, this rollback belongs to the account that's no
+      // longer current -- applying it would mutate the new account's list.
+      if (requestId != _requestId) return false;
       _items.removeWhere((p) => p.id == product.id);
       _error = 'فشل إضافة المنتج إلى المفضلة: ${_describe(e)}';
       notifyListeners();
@@ -84,6 +101,7 @@ class WishlistProvider with ChangeNotifier {
   }
 
   Future<bool> removeFromWishlist(Product product) async {
+    final requestId = _requestId;
     final removed = _items.where((p) => p.id == product.id).toList();
 
     try {
@@ -96,6 +114,9 @@ class WishlistProvider with ChangeNotifier {
       );
       return true;
     } catch (e) {
+      // See addToWishlist -- don't re-add items removed for an account
+      // that's no longer the current one.
+      if (requestId != _requestId) return false;
       _items.addAll(removed);
       _error = 'فشل إزالة المنتج من المفضلة: ${_describe(e)}';
       notifyListeners();
@@ -113,6 +134,7 @@ class WishlistProvider with ChangeNotifier {
   /// badge count) don't keep showing while logged out or after switching
   /// accounts — unlike the cart, the wishlist itself is never deleted.
   void reset() {
+    _requestId++;
     _items.clear();
     _error = null;
     notifyListeners();

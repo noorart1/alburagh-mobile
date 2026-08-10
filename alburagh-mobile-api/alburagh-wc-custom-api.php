@@ -1630,15 +1630,30 @@ private function get_or_create_wishlist_id($user_id) {
 global $wpdb;
 $lists_table = $wpdb->prefix . 'yith_wcwl_lists';
 
-$wishlist_id = $wpdb->get_var($wpdb->prepare(
-"SELECT ID FROM {$lists_table} WHERE user_id = %d AND is_default = 1 LIMIT 1",
+$row = $wpdb->get_row($wpdb->prepare(
+"SELECT ID, dateadded FROM {$lists_table} WHERE user_id = %d AND is_default = 1 LIMIT 1",
 $user_id
 ));
 
-if ($wishlist_id) {
-return intval($wishlist_id);
+if ($row) {
+// A default list dated before this account was even registered belongs
+// to a previously deleted WordPress user whose numeric ID got recycled
+// -- WP's user deletion doesn't cascade-delete YITH's wishlist tables,
+// so a brand new account can otherwise silently inherit a stranger's
+// old wishlist items just by reusing their old user_id. Detach the
+// stale row instead of returning it, and fall through to create a
+// real one below.
+$user = get_userdata($user_id);
+if ($user && strtotime($row->dateadded) >= strtotime($user->user_registered)) {
+return intval($row->ID);
+}
+$wpdb->update($lists_table, array('is_default' => 0), array('ID' => $row->ID));
 }
 
+// Note: this table has no dateupdated column -- an earlier version of
+// this insert included one, which made every first-time insert fail
+// silently (insert_id back as 0) and collapse every affected new
+// account's wishlist into the same shared wishlist_id=0 bucket.
 $wpdb->insert($lists_table, array(
 'user_id' => $user_id,
 'session_id' => '',
@@ -1647,7 +1662,6 @@ $wpdb->insert($lists_table, array(
 'wishlist_token' => wp_generate_password(12, false),
 'is_default' => 1,
 'dateadded' => current_time('mysql'),
-'dateupdated' => current_time('mysql'),
 ));
 
 return intval($wpdb->insert_id);
