@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'auth_interceptor.dart';
 import 'constants.dart';
+import 'retry_interceptor.dart';
 import 'secure_token_storage.dart';
 import '../models/address.dart';
 
@@ -91,6 +92,11 @@ class ApiService {
           },
         ),
       );
+      // Registered on both clients (the JWT-plugin login fallback on
+      // _wpDio benefits too) -- it's a no-op for anything but a transient
+      // timeout/connection error/502/503/504 on a GET, or an explicitly
+      // opted-in request, so it's safe everywhere.
+      dio.interceptors.add(RetryInterceptor(dio: dio));
     }
 
     _dio.interceptors.add(
