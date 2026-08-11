@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,6 +8,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
 import '../core/currency_utils.dart';
+import '../core/home_cache.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/category.dart';
@@ -14,6 +16,7 @@ import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
 import '../widgets/product_card.dart';
+import '../widgets/skeleton_box.dart';
 import 'category_screen.dart';
 import 'product_detail_screen.dart';
 import 'product_list_screen.dart';
@@ -30,20 +33,36 @@ class _HomeScreenState extends State<HomeScreen> {
   final ApiService _api = ApiService();
   List<Product> intellectualGamesProducts = [];
   Category? intellectualGamesCategory;
+  bool intellectualGamesLoading = true;
   List<Product> collectionsProducts = [];
   Category? collectionsCategory;
+  bool collectionsLoading = true;
   List<Product> featuredBooksProducts = [];
   Category? featuredBooksCategory;
+  bool featuredBooksLoading = true;
   List<Product> educationalBooksProducts = [];
   Category? educationalBooksCategory;
+  bool educationalBooksLoading = true;
   List<Product> religiousProducts = [];
   Category? religiousCategory;
+  bool religiousLoading = true;
   List<Product> heritageBooksProducts = [];
   Category? heritageBooksCategory;
+  bool heritageBooksLoading = true;
   List<Product> skillsDevelopmentProducts = [];
   Category? skillsDevelopmentCategory;
+  bool skillsDevelopmentLoading = true;
   List<Category> categories = [];
-  bool isLoading = true;
+  bool categoriesLoading = true;
+
+  // Bumped on every network refresh (initial load, currency change, pull to
+  // refresh, connectivity regained) so a slow, stale request can tell it's
+  // no longer the latest and skip applying its response -- same pattern as
+  // WishlistProvider._requestId / _HomeSearchBarState._searchGeneration.
+  int _loadGeneration = 0;
+
+  bool _hasConnection = true;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   late final CurrencyProvider _currencyProvider;
 
@@ -52,16 +71,43 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _currencyProvider = context.read<CurrencyProvider>();
     _currencyProvider.addListener(_onCurrencyChanged);
-    loadData();
+    // Cache-first: get any last-known content on screen immediately, then
+    // independently kick off the real network refresh -- neither awaits
+    // the other, so a slow/offline network fetch never delays showing
+    // whatever's cached, and a cache-read hiccup never delays the network
+    // request starting.
+    unawaited(_loadFromCache());
+    unawaited(_loadFromNetwork());
+    unawaited(_initConnectivity());
   }
 
   @override
   void dispose() {
     _currencyProvider.removeListener(_onCurrencyChanged);
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 
-  void _onCurrencyChanged() => loadData();
+  void _onCurrencyChanged() => _loadFromNetwork();
+
+  Future<void> _initConnectivity() async {
+    final initial = await Connectivity().checkConnectivity();
+    if (!mounted) return;
+    _hasConnection = initial.any((r) => r != ConnectivityResult.none);
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
+      final hasConnection = results.any((r) => r != ConnectivityResult.none);
+      // Only refetch on the none -> some transition (regaining
+      // connectivity), not on every connectivity event -- otherwise this
+      // would also fire (redundantly) whenever the connection type merely
+      // changes, e.g. wifi to mobile data.
+      if (hasConnection && !_hasConnection) {
+        _loadFromNetwork();
+      }
+      _hasConnection = hasConnection;
+    });
+  }
 
   Category? _findCategoryBy(List<Category> categories, List<String> matches) {
     final candidates = matches.map((m) => m.toLowerCase()).toSet();
@@ -74,195 +120,264 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
-  Future<void> loadData() async {
-    try {
-      final currency = _currencyProvider.currency;
-      final catData = await _api.getCategories();
+  void _resolveCategoryMatches() {
+    collectionsCategory = _findCategoryBy(categories, ['collections']);
+    featuredBooksCategory = _findCategoryBy(categories, [
+      'الكتب المصورة',
+      'picture-books',
+    ]);
+    educationalBooksCategory = _findCategoryBy(categories, [
+      'الكتب التعليمية',
+      'educational',
+    ]);
+    intellectualGamesCategory = _findCategoryBy(categories, [
+      'الألعاب التعليمية',
+      'intellectual-game',
+    ]);
+    religiousCategory = _findCategoryBy(categories, [
+      'دينية',
+      'كتب دينية',
+      'الكتب الدينية',
+      'religious',
+      'religious-books',
+    ]);
+    heritageBooksCategory = _findCategoryBy(categories, [
+      'تراثية',
+      'كتب تراثية',
+      'الكتب التراثية',
+      'التراث',
+      'heritage',
+      'heritage-books',
+    ]);
+    skillsDevelopmentCategory = _findCategoryBy(categories, [
+      'مهارات',
+      'تنمية المهارات',
+      'تنمية مهارات',
+      'skills',
+      'skills-development',
+    ]);
+  }
 
-      if (!mounted) return;
+  /// Populates every section from its last-cached response, if any, so a
+  /// reopened app shows real content immediately instead of a blank/loading
+  /// screen while _loadFromNetwork (kicked off independently in initState)
+  /// catches up in the background.
+  Future<void> _loadFromCache() async {
+    final cached = await Future.wait([
+      HomeCache.readList(HomeCache.categoriesKey),
+      HomeCache.readList(HomeCache.productsKey('collections')),
+      HomeCache.readList(HomeCache.productsKey('featuredBooks')),
+      HomeCache.readList(HomeCache.productsKey('educational')),
+      HomeCache.readList(HomeCache.productsKey('intellectualGames')),
+      HomeCache.readList(HomeCache.productsKey('religious')),
+      HomeCache.readList(HomeCache.productsKey('heritageBooks')),
+      HomeCache.readList(HomeCache.productsKey('skillsDevelopment')),
+    ]);
+    if (!mounted) return;
+
+    void applySection(
+      List<dynamic>? data,
+      void Function(List<Product> products) apply,
+      VoidCallback markLoaded,
+    ) {
+      if (data == null) return;
+      apply(data.map((p) => Product.fromJson(p)).toList());
+      markLoaded();
+    }
+
+    setState(() {
+      final cachedCategories = cached[0];
+      if (cachedCategories != null) {
+        categories = cachedCategories.map((c) => Category.fromJson(c)).toList();
+        _resolveCategoryMatches();
+        categoriesLoading = false;
+      }
+      applySection(
+        cached[1],
+        (p) => collectionsProducts = p,
+        () => collectionsLoading = false,
+      );
+      applySection(
+        cached[2],
+        (p) => featuredBooksProducts = p,
+        () => featuredBooksLoading = false,
+      );
+      applySection(
+        cached[3],
+        (p) => educationalBooksProducts = p,
+        () => educationalBooksLoading = false,
+      );
+      applySection(
+        cached[4],
+        (p) => intellectualGamesProducts = p,
+        () => intellectualGamesLoading = false,
+      );
+      applySection(
+        cached[5],
+        (p) => religiousProducts = p,
+        () => religiousLoading = false,
+      );
+      applySection(
+        cached[6],
+        (p) => heritageBooksProducts = p,
+        () => heritageBooksLoading = false,
+      );
+      applySection(
+        cached[7],
+        (p) => skillsDevelopmentProducts = p,
+        () => skillsDevelopmentLoading = false,
+      );
+    });
+  }
+
+  /// Fetches one section's products for [category] (a no-op if the category
+  /// hasn't resolved), applies + caches the result, and always clears the
+  /// section's loading flag when it settles (success or failure) so its
+  /// skeleton never spins forever. Independent per section: a slow/failing
+  /// fetch for one section never blocks or is blocked by any other.
+  Future<void> _loadProductSection({
+    required int generation,
+    required String currency,
+    required Category? category,
+    required String cacheKey,
+    required void Function(List<Product> products) onLoaded,
+    required VoidCallback onSettled,
+  }) async {
+    if (category == null) {
+      if (mounted && generation == _loadGeneration) setState(onSettled);
+      return;
+    }
+    try {
+      final data = await _api.getProducts(
+        category: category.slug ?? category.id.toString(),
+        currency: currency,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        onLoaded(data.map((p) => Product.fromJson(p)).toList());
+        onSettled();
+      });
+      unawaited(HomeCache.writeList(HomeCache.productsKey(cacheKey), data));
+    } catch (_) {
+      // Leave this section's products as-is (cached/previous data, or
+      // still empty); _buildSection hides itself when empty and not
+      // loading, matching the previous behavior for a failed fetch.
+      if (!mounted || generation != _loadGeneration) return;
+      setState(onSettled);
+    }
+  }
+
+  Future<void> _loadCart() async {
+    // Independent, non-critical to the home screen's own content -- a cart
+    // failure (or slowness) must never block or be blocked by anything
+    // above.
+    try {
+      await context.read<CartProvider>().loadCart();
+    } catch (_) {
+      // Ignore cart errors so the home screen stays usable.
+    }
+  }
+
+  /// Refreshes every section from the network: the real data source, run
+  /// independently of and concurrently with everything else (cache
+  /// population, other sections, the cart). Safe to call repeatedly
+  /// (currency change, pull-to-refresh, connectivity regained) -- each call
+  /// gets its own generation so a slow, superseded call's response can't
+  /// clobber a newer one's.
+  Future<void> _loadFromNetwork() async {
+    final generation = ++_loadGeneration;
+    final currency = _currencyProvider.currency;
+
+    try {
+      final catData = await _api.getCategories();
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         categories = catData.map((c) => Category.fromJson(c)).toList();
-        collectionsCategory = _findCategoryBy(categories, ['collections']);
-        featuredBooksCategory = _findCategoryBy(categories, [
-          'الكتب المصورة',
-          'picture-books',
-        ]);
-        educationalBooksCategory = _findCategoryBy(categories, [
-          'الكتب التعليمية',
-          'educational',
-        ]);
-        intellectualGamesCategory = _findCategoryBy(categories, [
-          'الألعاب التعليمية',
-          'intellectual-game',
-        ]);
-        religiousCategory = _findCategoryBy(categories, [
-          'دينية',
-          'كتب دينية',
-          'الكتب الدينية',
-          'religious',
-          'religious-books',
-        ]);
-        heritageBooksCategory = _findCategoryBy(categories, [
-          'تراثية',
-          'كتب تراثية',
-          'الكتب التراثية',
-          'التراث',
-          'heritage',
-          'heritage-books',
-        ]);
-        skillsDevelopmentCategory = _findCategoryBy(categories, [
-          'مهارات',
-          'تنمية المهارات',
-          'تنمية مهارات',
-          'skills',
-          'skills-development',
-        ]);
-        isLoading = false;
+        _resolveCategoryMatches();
+        categoriesLoading = false;
       });
-
-      // Same treatment as the other category rows below: secondary section,
-      // loaded after the category list resolves which category id this is.
-      try {
-        final educationalBooksCat = educationalBooksCategory;
-        if (educationalBooksCat != null) {
-          final educationalBooksData = await _api.getProducts(
-            category:
-                educationalBooksCat.slug ?? educationalBooksCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            educationalBooksProducts = educationalBooksData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave educationalBooksProducts as-is; _buildSection hides itself when empty.
-      }
-      try {
-        final intellectualGamesCat = intellectualGamesCategory;
-        if (intellectualGamesCat != null) {
-          final intellectualGamesData = await _api.getProducts(
-            category:
-                intellectualGamesCat.slug ?? intellectualGamesCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            intellectualGamesProducts = intellectualGamesData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave intellectualGamesProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as best-sellers above: secondary section, loaded
-      // after the category list resolves which category id is "Collections".
-      try {
-        final collectionsCat = collectionsCategory;
-        if (collectionsCat != null) {
-          final collectionsData = await _api.getProducts(
-            category: collectionsCat.slug ?? collectionsCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            collectionsProducts = collectionsData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave collectionsProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment: the row should show this category's own products,
-      // matching what its title and "more" button both point to, rather
-      // than the unrelated featured-products list.
-      try {
-        final featuredBooksCat = featuredBooksCategory;
-        if (featuredBooksCat != null) {
-          final featuredBooksData = await _api.getProducts(
-            category: featuredBooksCat.slug ?? featuredBooksCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            featuredBooksProducts = featuredBooksData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave featuredBooksProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as the other secondary sections above.
-      try {
-        final religiousCat = religiousCategory;
-        if (religiousCat != null) {
-          final religiousData = await _api.getProducts(
-            category: religiousCat.slug ?? religiousCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            religiousProducts = religiousData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave religiousProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as the other secondary sections above.
-      try {
-        final heritageBooksCat = heritageBooksCategory;
-        if (heritageBooksCat != null) {
-          final heritageBooksData = await _api.getProducts(
-            category: heritageBooksCat.slug ?? heritageBooksCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            heritageBooksProducts = heritageBooksData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave heritageBooksProducts as-is; _buildSection hides itself when empty.
-      }
-      // Same treatment as the other secondary sections above.
-      try {
-        final skillsDevelopmentCat = skillsDevelopmentCategory;
-        if (skillsDevelopmentCat != null) {
-          final skillsDevelopmentData = await _api.getProducts(
-            category:
-                skillsDevelopmentCat.slug ?? skillsDevelopmentCat.id.toString(),
-            currency: currency,
-          );
-          if (!mounted) return;
-          setState(() {
-            skillsDevelopmentProducts = skillsDevelopmentData
-                .map((p) => Product.fromJson(p))
-                .toList();
-          });
-        }
-      } catch (_) {
-        // Leave skillsDevelopmentProducts as-is; _buildSection hides itself when empty.
-      }
-      // Load cart data after loading products. Do not let a cart failure
-      // block the already-loaded home content.
-      try {
-        await context.read<CartProvider>().loadCart();
-      } catch (_) {
-        // Ignore cart errors so the home screen stays usable.
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => isLoading = false);
+      unawaited(HomeCache.writeList(HomeCache.categoriesKey, catData));
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() => categoriesLoading = false);
+      // No resolved categories to fetch section products for -- but the
+      // cart restore below is still independent of that failure.
+      unawaited(_loadCart());
+      return;
     }
+
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: collectionsCategory,
+        cacheKey: 'collections',
+        onLoaded: (p) => collectionsProducts = p,
+        onSettled: () => collectionsLoading = false,
+      ),
+    );
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: featuredBooksCategory,
+        cacheKey: 'featuredBooks',
+        onLoaded: (p) => featuredBooksProducts = p,
+        onSettled: () => featuredBooksLoading = false,
+      ),
+    );
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: educationalBooksCategory,
+        cacheKey: 'educational',
+        onLoaded: (p) => educationalBooksProducts = p,
+        onSettled: () => educationalBooksLoading = false,
+      ),
+    );
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: intellectualGamesCategory,
+        cacheKey: 'intellectualGames',
+        onLoaded: (p) => intellectualGamesProducts = p,
+        onSettled: () => intellectualGamesLoading = false,
+      ),
+    );
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: religiousCategory,
+        cacheKey: 'religious',
+        onLoaded: (p) => religiousProducts = p,
+        onSettled: () => religiousLoading = false,
+      ),
+    );
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: heritageBooksCategory,
+        cacheKey: 'heritageBooks',
+        onLoaded: (p) => heritageBooksProducts = p,
+        onSettled: () => heritageBooksLoading = false,
+      ),
+    );
+    unawaited(
+      _loadProductSection(
+        generation: generation,
+        currency: currency,
+        category: skillsDevelopmentCategory,
+        cacheKey: 'skillsDevelopment',
+        onLoaded: (p) => skillsDevelopmentProducts = p,
+        onSettled: () => skillsDevelopmentLoading = false,
+      ),
+    );
+
+    unawaited(_loadCart());
   }
 
   @override
@@ -274,83 +389,97 @@ class _HomeScreenState extends State<HomeScreen> {
       // visible against that dark background.
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        body: isLoading
-            ? const SafeArea(child: Center(child: CircularProgressIndicator()))
-            : RefreshIndicator(
-                onRefresh: loadData,
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Container(
-                        color: const Color(0xFF6A1B9A),
-                        // Single source of truth for the header's left/right
-                        // margin -- the logo row and the search bar below
-                        // both sit inside this same padding, so their edges
-                        // line up on one consistent grid instead of each
-                        // widget carrying its own, slightly different inset.
-                        // The top inset adds the status bar's own height on
-                        // top of the normal 12px breathing room, since this
-                        // Container is no longer inside a SafeArea and its
-                        // purple background now extends behind the status
-                        // bar -- without this, the logo/currency row itself
-                        // would be the thing sitting behind the icons.
-                        padding: EdgeInsets.fromLTRB(
-                          18,
-                          MediaQuery.of(context).padding.top + 12,
-                          18,
-                          14,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                CachedNetworkImage(
-                                  imageUrl:
-                                      'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
-                                  height: 32,
-                                  fit: BoxFit.contain,
-                                ),
-                                const _CurrencySwitcher(),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            const _HomeSearchBar(),
-                          ],
+        body: RefreshIndicator(
+          onRefresh: _loadFromNetwork,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Container(
+                  color: const Color(0xFF6A1B9A),
+                  // Single source of truth for the header's left/right
+                  // margin -- the logo row and the search bar below
+                  // both sit inside this same padding, so their edges
+                  // line up on one consistent grid instead of each
+                  // widget carrying its own, slightly different inset.
+                  // The top inset adds the status bar's own height on
+                  // top of the normal 12px breathing room, since this
+                  // Container is no longer inside a SafeArea and its
+                  // purple background now extends behind the status
+                  // bar -- without this, the logo/currency row itself
+                  // would be the thing sitting behind the icons.
+                  padding: EdgeInsets.fromLTRB(
+                    18,
+                    MediaQuery.of(context).padding.top + 12,
+                    18,
+                    14,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl:
+                                'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
+                            height: 32,
+                            fit: BoxFit.contain,
+                          ),
+                          const _CurrencySwitcher(),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const _HomeSearchBar(),
+                    ],
+                  ),
+                ),
+              ),
+              SliverSafeArea(
+                // The header above already accounted for the top
+                // inset itself; this restores the normal safe-area
+                // padding (left/right notches, bottom gesture area)
+                // for everything else on the page.
+                top: false,
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 16),
+                      const _BannerCarousel(),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
+                        child: Text(
+                          'الأقسام',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                    SliverSafeArea(
-                      // The header above already accounted for the top
-                      // inset itself; this restores the normal safe-area
-                      // padding (left/right notches, bottom gesture area)
-                      // for everything else on the page.
-                      top: false,
-                      sliver: SliverToBoxAdapter(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const SizedBox(height: 16),
-                            const _BannerCarousel(),
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
-                              child: Text(
-                                'الأقسام',
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
+                      SizedBox(
+                        // Just the circle now (60 + its border) --
+                        // the name/count text below it was removed.
+                        height: 76,
+                        child: categoriesLoading
+                            ? ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
                                 ),
-                              ),
-                            ),
-                            SizedBox(
-                              // Just the circle now (60 + its border) --
-                              // the name/count text below it was removed.
-                              height: 76,
-                              child: ListView.builder(
+                                itemCount: 6,
+                                itemBuilder: (context, index) => Padding(
+                                  padding: const EdgeInsets.all(6.0),
+                                  child: SkeletonBox(
+                                    width: 60,
+                                    height: 60,
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
                                 scrollDirection: Axis.horizontal,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -408,83 +537,88 @@ class _HomeScreenState extends State<HomeScreen> {
                                   );
                                 },
                               ),
-                            ),
-                            _buildSection(
-                              title: 'السلاسل القصصية',
-                              products: collectionsProducts,
-                              seeMoreBuilder: collectionsCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: collectionsCategory,
-                                    )
-                                  : null,
-                            ),
-                            _buildSection(
-                              title: 'الكتب المصورة',
-                              products: featuredBooksProducts,
-                              // Prefer the matching "الكتب المصورة" category so
-                              // "more" browses that category specifically;
-                              // only fall back to the whole catalog if no such
-                              // category exists on the backend.
-                              seeMoreBuilder: featuredBooksCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: featuredBooksCategory,
-                                    )
-                                  : (context) =>
-                                        const CategoryScreen(title: 'كل الكتب'),
-                            ),
-                            _buildSection(
-                              title: 'الكتب التعليمية',
-                              products: educationalBooksProducts,
-                              seeMoreBuilder: educationalBooksCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: educationalBooksCategory,
-                                    )
-                                  : null,
-                            ),
-                            _buildSection(
-                              title: 'الألعاب التعليمية',
-                              products: intellectualGamesProducts,
-                              seeMoreBuilder: intellectualGamesCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: intellectualGamesCategory,
-                                    )
-                                  : null,
-                            ),
-                            _buildSection(
-                              title: 'الكتب الدينية',
-                              products: religiousProducts,
-                              seeMoreBuilder: religiousCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: religiousCategory,
-                                    )
-                                  : null,
-                            ),
-                            _buildSection(
-                              title: 'الكتب التراثية',
-                              products: heritageBooksProducts,
-                              seeMoreBuilder: heritageBooksCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: heritageBooksCategory,
-                                    )
-                                  : null,
-                            ),
-                            _buildSection(
-                              title: 'تنمية المهارات',
-                              products: skillsDevelopmentProducts,
-                              seeMoreBuilder: skillsDevelopmentCategory != null
-                                  ? (context) => CategoryScreen(
-                                      category: skillsDevelopmentCategory,
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                        ),
                       ),
-                    ),
-                  ],
+                      _buildSection(
+                        title: 'السلاسل القصصية',
+                        products: collectionsProducts,
+                        loading: collectionsLoading,
+                        seeMoreBuilder: collectionsCategory != null
+                            ? (context) =>
+                                  CategoryScreen(category: collectionsCategory)
+                            : null,
+                      ),
+                      _buildSection(
+                        title: 'الكتب المصورة',
+                        products: featuredBooksProducts,
+                        loading: featuredBooksLoading,
+                        // Prefer the matching "الكتب المصورة" category so
+                        // "more" browses that category specifically;
+                        // only fall back to the whole catalog if no such
+                        // category exists on the backend.
+                        seeMoreBuilder: featuredBooksCategory != null
+                            ? (context) => CategoryScreen(
+                                category: featuredBooksCategory,
+                              )
+                            : (context) =>
+                                  const CategoryScreen(title: 'كل الكتب'),
+                      ),
+                      _buildSection(
+                        title: 'الكتب التعليمية',
+                        products: educationalBooksProducts,
+                        loading: educationalBooksLoading,
+                        seeMoreBuilder: educationalBooksCategory != null
+                            ? (context) => CategoryScreen(
+                                category: educationalBooksCategory,
+                              )
+                            : null,
+                      ),
+                      _buildSection(
+                        title: 'الألعاب التعليمية',
+                        products: intellectualGamesProducts,
+                        loading: intellectualGamesLoading,
+                        seeMoreBuilder: intellectualGamesCategory != null
+                            ? (context) => CategoryScreen(
+                                category: intellectualGamesCategory,
+                              )
+                            : null,
+                      ),
+                      _buildSection(
+                        title: 'الكتب الدينية',
+                        products: religiousProducts,
+                        loading: religiousLoading,
+                        seeMoreBuilder: religiousCategory != null
+                            ? (context) =>
+                                  CategoryScreen(category: religiousCategory)
+                            : null,
+                      ),
+                      _buildSection(
+                        title: 'الكتب التراثية',
+                        products: heritageBooksProducts,
+                        loading: heritageBooksLoading,
+                        seeMoreBuilder: heritageBooksCategory != null
+                            ? (context) => CategoryScreen(
+                                category: heritageBooksCategory,
+                              )
+                            : null,
+                      ),
+                      _buildSection(
+                        title: 'تنمية المهارات',
+                        products: skillsDevelopmentProducts,
+                        loading: skillsDevelopmentLoading,
+                        seeMoreBuilder: skillsDevelopmentCategory != null
+                            ? (context) => CategoryScreen(
+                                category: skillsDevelopmentCategory,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -492,9 +626,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSection({
     required String title,
     required List<Product> products,
+    required bool loading,
     WidgetBuilder? seeMoreBuilder,
   }) {
-    if (products.isEmpty) return const SizedBox.shrink();
+    if (!loading && products.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -546,23 +681,48 @@ class _HomeScreenState extends State<HomeScreen> {
         Container(
           height: 290,
           color: const Color(0xFFF9C900),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              final product = products[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0), //4
-                child: SizedBox(
-                  width: 170,
-                  child: ProductCard(key: ValueKey(product.id), product: product),
+          child: loading
+              ? const _ProductSectionSkeleton()
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
+                    final product = products[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 0), //4
+                      child: SizedBox(
+                        width: 170,
+                        child: ProductCard(
+                          key: ValueKey(product.id),
+                          product: product,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ],
+    );
+  }
+}
+
+/// Matches _buildSection's real product row's geometry (170x290 cards, same
+/// horizontal padding) so the layout doesn't jump when real content
+/// replaces it.
+class _ProductSectionSkeleton extends StatelessWidget {
+  const _ProductSectionSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      itemCount: 3,
+      itemBuilder: (context, index) => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4),
+        child: SkeletonBox(width: 170, height: 290),
+      ),
     );
   }
 }

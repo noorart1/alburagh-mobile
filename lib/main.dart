@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -19,7 +17,7 @@ import 'providers/currency_provider.dart';
 import 'providers/wishlist_provider.dart';
 import 'providers/recently_viewed_provider.dart';
 import 'screens/cart_screen.dart';
-import 'screens/splash_screen.dart';
+import 'screens/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,35 +52,13 @@ void main() async {
     unawaited(PushNotifications.init());
   }
   final initialCurrency = await CurrencyProvider.loadInitial();
-  final showSplashLogo = await _needsFlutterSplashLogo();
-  runApp(MyApp(initialCurrency: initialCurrency, showSplashLogo: showSplashLogo));
-}
-
-// Only Android 12+'s native SplashScreen API is unable to show the app's
-// full logo -- its one image slot is always rendered small and masked
-// inside an icon-shaped safe zone (see pubspec.yaml's flutter_native_splash
-// config), so that's the only platform where SplashScreen's own
-// Flutter-drawn overlay needs to show the logo itself. Every other
-// platform's native splash (including older Android) already renders it in
-// full, so repeating it there would just show the same image back to back.
-// Resolved here, before runApp(), so it's ready before Flutter's first
-// frame -- the native splash is still covering the screen during this
-// await, so there's nothing to flicker.
-Future<bool> _needsFlutterSplashLogo() async {
-  if (kIsWeb || !Platform.isAndroid) return false;
-  final info = await DeviceInfoPlugin().androidInfo;
-  return info.version.sdkInt >= 31;
+  runApp(MyApp(initialCurrency: initialCurrency));
 }
 
 class MyApp extends StatelessWidget {
   final String initialCurrency;
-  final bool showSplashLogo;
 
-  const MyApp({
-    super.key,
-    required this.initialCurrency,
-    required this.showSplashLogo,
-  });
+  const MyApp({super.key, required this.initialCurrency});
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +84,11 @@ class MyApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider(create: (_) => RecentlyViewedProvider()),
-        ChangeNotifierProxyProvider2<CartProvider, WishlistProvider, AuthProvider>(
+        ChangeNotifierProxyProvider2<
+          CartProvider,
+          WishlistProvider,
+          AuthProvider
+        >(
           create: (context) => AuthProvider(
             Provider.of<CartProvider>(context, listen: false),
             Provider.of<WishlistProvider>(context, listen: false),
@@ -133,7 +113,7 @@ class MyApp extends StatelessWidget {
           );
         },
         theme: _buildTheme(),
-        home: SplashScreen(showLogo: showSplashLogo),
+        home: const MainScreen(),
         routes: {'/cart': (context) => const CartScreen()},
         debugShowCheckedModeBanner: false,
       ),
