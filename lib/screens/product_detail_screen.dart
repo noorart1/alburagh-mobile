@@ -87,6 +87,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final isExternal =
         widget.product.type == 'external' &&
         widget.product.externalUrl.isNotEmpty;
+    // select (not watch) so this whole (large) screen only rebuilds for the
+    // add-to-cart button's own in-flight state, not every CartProvider
+    // change elsewhere (e.g. another product's cart badge count updating).
+    final isAddingToCart = context.select<CartProvider, bool>(
+      (cart) => cart.isAddingToCart(widget.product.id),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -211,7 +217,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
                           )
                         : ElevatedButton.icon(
-                            onPressed: !widget.product.inStock
+                            onPressed:
+                                !widget.product.inStock || isAddingToCart
                                 ? null
                                 : () async {
                                     final cart = context.read<CartProvider>();
@@ -232,11 +239,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       );
                                     }
                                   },
-                            icon: const Icon(Icons.add_shopping_cart),
+                            icon: isAddingToCart
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.add_shopping_cart),
                             label: Text(
-                              widget.product.inStock
-                                  ? 'إضافة إلى السلة'
-                                  : 'نفذ من المخزون',
+                              !widget.product.inStock
+                                  ? 'نفذ من المخزون'
+                                  : isAddingToCart
+                                  ? 'جارٍ الإضافة...'
+                                  : 'إضافة إلى السلة',
                               style: const TextStyle(fontSize: 18),
                             ),
                           ),

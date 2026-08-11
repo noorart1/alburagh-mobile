@@ -33,10 +33,21 @@ class CartProvider with ChangeNotifier {
   String _currency = 'USD';
   String _currencySymbol = '\$';
 
+  // Per-product "add to cart" lock: while a product's id is a key here,
+  // there's an addToCart request for it in flight (or about to start one to
+  // cover a queued tap -- see addToCart's doc comment). Deliberately keyed
+  // by product id rather than a single app-wide flag, so tapping "add" on
+  // one product never disables the button for a different one.
+  final Map<int, Future<bool>> _inFlightAddToCart = {};
+  final Map<int, int> _queuedAddQuantity = {};
+
   List<CartItem> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get currencySymbol => _currencySymbol;
+
+  bool isAddingToCart(int productId) =>
+      _inFlightAddToCart.containsKey(productId);
 
   /// Called whenever the user's manual IQD/USD choice changes, so every
   /// subsequent cart call asks the backend to convert to that currency.
@@ -112,23 +123,69 @@ class CartProvider with ChangeNotifier {
     return null;
   }
 
-  Future<bool> addToCart(Product product, {int quantity = 1}) async {
+  /// Adds [quantity] of [product] to the cart, guarding against the classic
+  /// double-tap/rapid-tap race: firing a second request for the same
+  /// product before the first one's response comes back. That's a real risk
+  /// here specifically because the guest cart is a shared, static
+  /// server-session cookie (see ApiService's _CookieStore doc comment) --
+  /// two concurrent requests can interleave and step on each other's
+  /// session write, silently losing one tap's worth of quantity instead of
+  /// applying both.
+  ///
+  /// If a request for this product is already in flight, this call doesn't
+  /// start a second one: it queues [quantity] to be folded into the next
+  /// request (sent right after the current one finishes) and returns the
+  /// *same* Future the in-flight caller is awaiting, so every caller that
+  /// tapped during the window sees the same, accurate final result instead
+  /// of a second tap being silently dropped or lied to about success.
+  Future<bool> addToCart(Product product, {int quantity = 1}) {
+    final inFlight = _inFlightAddToCart[product.id];
+    if (inFlight != null) {
+      _queuedAddQuantity[product.id] =
+          (_queuedAddQuantity[product.id] ?? 0) + quantity;
+      return inFlight;
+    }
+
+    final future = _addToCart(product, quantity);
+    _inFlightAddToCart[product.id] = future;
+    notifyListeners(); // isAddingToCart(product.id) is now true
+    return future;
+  }
+
+  Future<bool> _addToCart(Product product, int quantity) async {
+    _error = null;
+    var pendingQuantity = quantity;
     try {
-      _error = null;
-      await _apiService.addToCart(
-        productId: product.id,
-        quantity: quantity,
-        currency: _currency,
-      );
+      // Drains any taps queued for this product while a round is in
+      // flight -- each round is one real API call, so rapid taps become a
+      // short sequence of controlled, sequential quantity updates instead
+      // of concurrent requests.
+      while (true) {
+        await _apiService.addToCart(
+          productId: product.id,
+          quantity: pendingQuantity,
+          currency: _currency,
+        );
+        final queued = _queuedAddQuantity.remove(product.id);
+        if (queued == null) break;
+        pendingQuantity = queued;
+      }
       await loadCart();
       return true;
     } catch (e) {
+      // A failed round's queued taps can't be trusted to still make sense
+      // against whatever the cart ends up looking like server-side --
+      // drop them rather than silently retrying with a stale quantity.
+      _queuedAddQuantity.remove(product.id);
       _error = friendlyErrorMessage(
         e,
         fallback: 'تعذر إضافة المنتج إلى السلة، حاول مرة أخرى',
       );
       notifyListeners();
       return false;
+    } finally {
+      _inFlightAddToCart.remove(product.id);
+      notifyListeners();
     }
   }
 

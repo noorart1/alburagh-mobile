@@ -324,7 +324,15 @@ class _CartButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isExternal =
         product.type == 'external' && product.externalUrl.isNotEmpty;
-    final disabled = !isExternal && !product.inStock;
+    // select (not watch) so this button only rebuilds when *this* product's
+    // own in-flight state changes -- see the wishlist button above for the
+    // same reasoning.
+    final isAdding = !isExternal
+        ? context.select<CartProvider, bool>(
+            (cart) => cart.isAddingToCart(product.id),
+          )
+        : false;
+    final disabled = !isExternal && (!product.inStock || isAdding);
 
     return SizedBox(
       width: 28,
@@ -358,11 +366,20 @@ class _CartButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           shape: const CircleBorder(),
         ),
-        child: Icon(
-          isExternal ? Icons.open_in_new : Icons.add_shopping_cart,
-          size: 16,
-          color: disabled ? AppColors.textMuted : AppColors.white,
-        ),
+        child: isAdding
+            ? const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.textMuted,
+                ),
+              )
+            : Icon(
+                isExternal ? Icons.open_in_new : Icons.add_shopping_cart,
+                size: 16,
+                color: disabled ? AppColors.textMuted : AppColors.white,
+              ),
       ),
     );
   }
