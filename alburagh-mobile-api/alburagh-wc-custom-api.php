@@ -313,6 +313,60 @@ $base64UrlSignature = self::base64UrlEncode($signature);
 return $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
 }
 
+// Refresh tokens are opaque (not signed JWTs): "<base64url user id>.<random
+// hex>". The user-id prefix lets refresh_token() look the account up in
+// O(1) instead of scanning usermeta for a hash match. Only the sha256 hash
+// of the token is ever persisted (in user meta), never the raw value, so a
+// database read alone can't be used to mint a session. Each successful
+// refresh rotates both tokens and overwrites the stored hash, so a replayed
+// old refresh token stops matching immediately -- this app only ever keeps
+// one refresh token valid per account at a time, matching its existing
+// single-session design (see the cookie/session notes elsewhere in the app).
+public static function generate_refresh_token($user) {
+$raw = self::base64UrlEncode((string) $user->ID) . '.' . bin2hex(random_bytes(32));
+$expires = time() + (DAY_IN_SECONDS * 30); // Valid for 30 days
+
+update_user_meta($user->ID, '_alburagh_refresh_token_hash', hash('sha256', $raw));
+update_user_meta($user->ID, '_alburagh_refresh_token_expires', $expires);
+
+return $raw;
+}
+
+// Validates a refresh token and, if valid, immediately rotates it (issues
+// and stores a new one) so the token passed in can never be redeemed twice.
+// Returns the WP_User on success, or false if the token is missing,
+// malformed, expired, or doesn't match what's stored for that account.
+public static function validate_and_rotate_refresh_token($raw_token) {
+if (empty($raw_token) || strpos($raw_token, '.') === false) {
+return false;
+}
+
+list($encoded_id) = explode('.', $raw_token, 2);
+$user_id = intval(self::base64UrlDecode($encoded_id));
+if (!$user_id) {
+return false;
+}
+
+$stored_hash = get_user_meta($user_id, '_alburagh_refresh_token_hash', true);
+$stored_expires = (int) get_user_meta($user_id, '_alburagh_refresh_token_expires', true);
+
+if (empty($stored_hash) || $stored_expires < time()) {
+return false;
+}
+
+if (!hash_equals($stored_hash, hash('sha256', $raw_token))) {
+return false;
+}
+
+$user = get_user_by('id', $user_id);
+return $user ?: false;
+}
+
+public static function revoke_refresh_token($user_id) {
+delete_user_meta($user_id, '_alburagh_refresh_token_hash');
+delete_user_meta($user_id, '_alburagh_refresh_token_expires');
+}
+
 public static function validate_token($token) {
 $parts = explode('.', $token);
 if (count($parts) !== 3) {
@@ -384,8 +438,10 @@ return new WP_Error('invalid_credentials', 'Incorrect email or password.', array
 }
 
 $token = AlBuragh_JWT_Auth::generate_token($user);
+$refresh_token = AlBuragh_JWT_Auth::generate_refresh_token($user);
 return new WP_REST_Response(array(
 'token' => $token,
+'refresh_token' => $refresh_token,
 'user_email' => $user->user_email,
 'user_nicename' => $user->user_nicename,
 'user_display_name' => $user->display_name,
@@ -397,6 +453,45 @@ return new WP_REST_Response(array(
 'last_name' => get_user_meta($user->ID, 'last_name', true)
 )
 ), 200);
+}
+
+// Exchanges a still-valid refresh token for a new access + refresh token
+// pair (rotation -- see AlBuragh_JWT_Auth::generate_refresh_token). Not
+// itself authenticated with the access token: the whole point is to be
+// callable after the access token has expired.
+public function refresh_token($request) {
+$params = $request->get_json_params();
+$raw_refresh_token = isset($params['refresh_token']) ? (string) $params['refresh_token'] : '';
+
+$user = AlBuragh_JWT_Auth::validate_and_rotate_refresh_token($raw_refresh_token);
+if (!$user) {
+return new WP_Error('invalid_refresh_token', 'Refresh token missing, expired, or invalid.', array('status' => 401));
+}
+
+return new WP_REST_Response(array(
+'token' => AlBuragh_JWT_Auth::generate_token($user),
+'refresh_token' => AlBuragh_JWT_Auth::generate_refresh_token($user),
+), 200);
+}
+
+// Best-effort server-side logout: invalidates the account's stored refresh
+// token so it can't be used to mint new access tokens after the app clears
+// its own local copies. Requires a still-valid access token, same pattern
+// as the other authenticated endpoints in this controller.
+public function revoke_refresh_token($request) {
+$auth_header = $request->get_header('Authorization');
+if (empty($auth_header)) {
+return new WP_Error('unauthorized', 'Token missing.', array('status' => 401));
+}
+
+$token = str_replace('Bearer ', '', $auth_header);
+$user_id = AlBuragh_JWT_Auth::validate_token($token);
+if (!$user_id) {
+return new WP_Error('unauthorized', 'Session expired or token invalid.', array('status' => 401));
+}
+
+AlBuragh_JWT_Auth::revoke_refresh_token($user_id);
+return new WP_REST_Response(array('success' => true), 200);
 }
 
 public function register($request) {
@@ -440,9 +535,11 @@ update_user_meta($user_id, 'billing_phone', $phone);
 
 $user = get_user_by('id', $user_id);
 $token = AlBuragh_JWT_Auth::generate_token($user);
+$refresh_token = AlBuragh_JWT_Auth::generate_refresh_token($user);
 
 return new WP_REST_Response(array(
 'token' => $token,
+'refresh_token' => $refresh_token,
 'user_email' => $user->user_email,
 'user_nicename' => $user->user_nicename,
 'user_display_name' => $user->display_name,
@@ -2189,6 +2286,16 @@ register_rest_route('alburagh/v1', '/register', array(
 register_rest_route('alburagh/v1', '/forgot-password', array(
 'methods' => 'POST',
 'callback' => array($auth, 'forgot_password'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/refresh-token', array(
+'methods' => 'POST',
+'callback' => array($auth, 'refresh_token'),
+'permission_callback' => '__return_true'
+));
+register_rest_route('alburagh/v1', '/revoke-refresh-token', array(
+'methods' => 'POST',
+'callback' => array($auth, 'revoke_refresh_token'),
 'permission_callback' => '__return_true'
 ));
 register_rest_route('alburagh/v1', '/profile', array(

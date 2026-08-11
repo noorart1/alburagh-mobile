@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
+import '../core/secure_token_storage.dart';
 import '../models/user.dart';
 import 'cart_provider.dart'; // Import CartProvider
 import 'wishlist_provider.dart';
@@ -41,12 +43,16 @@ class AuthProvider extends ChangeNotifier {
   late final Future<void> initialized;
 
   AuthProvider(this._cartProvider, this._wishlistProvider) {
+    // Lets ApiService's AuthInterceptor drop the session locally once the
+    // refresh token is confirmed dead (expired/revoked/rejected) -- never
+    // called for a plain network failure, see AuthInterceptor's doc comment.
+    _api.onSessionExpired = forceLogout;
     initialized = _loadSavedAuth();
   }
 
   Future<void> _loadSavedAuth() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
+    final token = await SecureTokenStorage.readAccessToken();
     final userId = prefs.getInt('user_id');
     final email = prefs.getString('user_email') ?? '';
     final name = prefs.getString('user_name') ?? '';
@@ -128,8 +134,21 @@ class AuthProvider extends ChangeNotifier {
       _user = User(id: userId, email: userEmail, name: name, token: token);
       _isLoggedIn = true;
 
+      // The wp-json JWT-plugin login fallback doesn't issue a refresh token
+      // (it's a third-party plugin, not this app's own backend) -- only the
+      // primary /login endpoint's response has one. Clearing first (instead
+      // of just not overwriting) stops a fallback login from silently
+      // inheriting whatever refresh token a previous session happened to
+      // leave behind -- a fallback-started session just won't silently
+      // refresh at all.
+      final refreshToken = authData['refresh_token']?.toString();
+      await SecureTokenStorage.clear();
+      await SecureTokenStorage.saveTokens(
+        accessToken: token,
+        refreshToken: refreshToken,
+      );
+
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', token);
       await prefs.setInt('user_id', userId);
       await prefs.setString('user_email', userEmail);
       await prefs.setString('user_name', name);
@@ -316,14 +335,32 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Best-effort server-side revoke, using the token while it's still
+    // around -- fire-and-forget so a slow/offline revoke call never blocks
+    // the user leaving their account, and a failure here is harmless (the
+    // refresh token just lingers server-side until it expires on its own).
+    final token = _user?.token;
+    if (token != null) {
+      unawaited(_api.revokeRefreshToken(token).catchError((_) {}));
+    }
+
+    await _clearLocalSession();
+  }
+
+  /// Drops the local session only -- no server revoke call. Used when
+  /// ApiService's AuthInterceptor has already confirmed server-side that the
+  /// refresh token is dead, so there's nothing left to revoke.
+  Future<void> forceLogout() => _clearLocalSession();
+
+  Future<void> _clearLocalSession() async {
     _user = null;
     _isLoggedIn = false;
     _error = null;
     _profile = null;
     _profileFuture = null;
 
+    await SecureTokenStorage.clear();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
     await prefs.remove('user_id');
     await prefs.remove('user_email');
     await prefs.remove('user_name');

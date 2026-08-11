@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_interceptor.dart';
 import 'constants.dart';
+import 'secure_token_storage.dart';
 import '../models/address.dart';
 
 /// Minimal in-memory cookie store shared by every [ApiService] instance.
@@ -51,6 +52,13 @@ class ApiService {
   final Dio _dio = Dio();
   final Dio _wpDio = Dio();
 
+  /// Set by AuthProvider so the interceptor can trigger a full local logout
+  /// when the refresh token itself turns out to be dead -- never called for
+  /// a plain network failure. Kept as an optional hook (rather than a direct
+  /// dependency on AuthProvider) so this file stays free of provider/UI
+  /// imports.
+  void Function()? onSessionExpired;
+
   ApiService._internal() {
     _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
@@ -84,6 +92,14 @@ class ApiService {
         ),
       );
     }
+
+    _dio.interceptors.add(
+      AuthInterceptor(
+        dio: _dio,
+        refreshTokens: refreshAccessToken,
+        onSessionExpired: () => onSessionExpired?.call(),
+      ),
+    );
   }
 
   Future<List<dynamic>> getProducts({
@@ -402,14 +418,42 @@ class ApiService {
   void resetSession() => _CookieStore.clear();
 
   Future<Options?> _authOptions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
+    final token = await SecureTokenStorage.readAccessToken();
 
     if (token == null || token.isEmpty) {
       return null;
     }
 
     return Options(headers: {'Authorization': 'Bearer $token'});
+  }
+
+  /// Exchanges a refresh token for a new {access, refresh} token pair via
+  /// `POST refresh-token`. Excluded from AuthInterceptor's own auth handling
+  /// (see its `_excludedPaths`), so a failure here surfaces as a plain
+  /// DioException rather than triggering another refresh attempt.
+  Future<Map<String, String>> refreshAccessToken(String refreshToken) async {
+    final response = await _dio.post(
+      'refresh-token',
+      data: {'refresh_token': refreshToken},
+    );
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+    return {
+      'access': data['token']?.toString() ?? '',
+      'refresh': data['refresh_token']?.toString() ?? '',
+    };
+  }
+
+  /// Best-effort server-side logout: invalidates the account's stored
+  /// refresh token so it can't be redeemed after the app clears its own
+  /// local copies. Callers should fire-and-forget this (don't block logout
+  /// on it, don't treat a failure as fatal).
+  Future<void> revokeRefreshToken(String accessToken) async {
+    await _dio.post(
+      'revoke-refresh-token',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
   }
 
   Future<Map<String, dynamic>> getCart({String? currency}) async {

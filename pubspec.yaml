@@ -41,6 +41,7 @@ dependencies:
   cached_network_image: ^3.3.0
   html: ^0.15.4
   shared_preferences: ^2.5.5
+  flutter_secure_storage: ^9.2.4
   url_launcher: ^6.2.0
   country_picker: ^2.0.28
   google_fonts: ^6.2.1
