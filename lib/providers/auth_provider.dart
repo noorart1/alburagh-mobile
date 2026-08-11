@@ -57,9 +57,16 @@ class AuthProvider extends ChangeNotifier {
     final userId = prefs.getInt('user_id');
     final email = prefs.getString('user_email') ?? '';
     final name = prefs.getString('user_name') ?? '';
+    final username = prefs.getString('user_username');
 
     if (token != null && userId != null && email.isNotEmpty) {
-      _user = User(id: userId, email: email, name: name, token: token);
+      _user = User(
+        id: userId,
+        email: email,
+        name: name,
+        username: username,
+        token: token,
+      );
       _isLoggedIn = true;
       notifyListeners();
       // Load cart after successful auto-login
@@ -131,8 +138,15 @@ class AuthProvider extends ChangeNotifier {
           ? displayName
           : identifier.split('@')[0];
       final userEmail = responseEmail.isNotEmpty ? responseEmail : identifier;
+      final username = alburaghUser?['username']?.toString();
 
-      _user = User(id: userId, email: userEmail, name: name, token: token);
+      _user = User(
+        id: userId,
+        email: userEmail,
+        name: name,
+        username: username,
+        token: token,
+      );
       _isLoggedIn = true;
 
       // The wp-json JWT-plugin login fallback doesn't issue a refresh token
@@ -153,6 +167,11 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setInt('user_id', userId);
       await prefs.setString('user_email', userEmail);
       await prefs.setString('user_name', name);
+      if (username != null && username.isNotEmpty) {
+        await prefs.setString('user_username', username);
+      } else {
+        await prefs.remove('user_username');
+      }
 
       _isLoading = false;
       notifyListeners();
@@ -365,6 +384,7 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('user_id');
     await prefs.remove('user_email');
     await prefs.remove('user_name');
+    await prefs.remove('user_username');
 
     notifyListeners();
     // Local-only reset -- see CartProvider.resetLocal's doc comment for

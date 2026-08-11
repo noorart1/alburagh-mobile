@@ -613,6 +613,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _ProfileHeader(
             name: _displayName,
             subtitle: _subtitle,
+            username:
+                authProvider.profile?['username']?.toString() ??
+                authProvider.user?.username ??
+                '',
             initial: _initial,
             avatarUrl: authProvider.profile?['avatar_url']?.toString(),
             isUploadingAvatar: _isUploadingAvatar,
@@ -1148,6 +1152,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileHeader extends StatelessWidget {
   final String name;
   final String subtitle;
+  final String username;
   final String initial;
   final String? avatarUrl;
   final bool isUploadingAvatar;
@@ -1156,6 +1161,7 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.name,
     required this.subtitle,
+    required this.username,
     required this.initial,
     required this.avatarUrl,
     required this.isUploadingAvatar,
@@ -1251,6 +1257,18 @@ class _ProfileHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.86)),
                 ),
+                if (username.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'اسم المستخدم: $username',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

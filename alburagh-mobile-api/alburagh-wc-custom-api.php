@@ -458,7 +458,8 @@ return new WP_REST_Response(array(
 'user_display_name' => $user->display_name,
 'user' => array(
 'id' => $user->ID,
-'username' => $user->user_login,
+// user_nicename, not user_login -- see the get_profile() note.
+'username' => $user->user_nicename,
 'email' => $user->user_email,
 'first_name' => get_user_meta($user->ID, 'first_name', true),
 'last_name' => get_user_meta($user->ID, 'last_name', true)
@@ -566,7 +567,8 @@ return new WP_REST_Response(array(
 'user_display_name' => $user->display_name,
 'user' => array(
 'id' => $user->ID,
-'username' => $user->user_login,
+// user_nicename, not user_login -- see the get_profile() note.
+'username' => $user->user_nicename,
 'email' => $user->user_email,
 'first_name' => $first_name,
 'last_name' => $last_name,
@@ -661,6 +663,10 @@ public function get_profile($request) {
     $avatar_id = get_user_meta($user_id, 'alburagh_avatar_id', true);
     $profile = [
         'id' => $user->ID,
+        // user_nicename (not user_login) -- accounts register with the full
+        // email as user_login, so the app shows this shorter, human-friendly
+        // slug (see register()) as the "username" instead of the email.
+        'username' => $user->user_nicename,
         'email' => $user->user_email,
         'first_name' => $user->first_name,
         'last_name' => $user->last_name,
