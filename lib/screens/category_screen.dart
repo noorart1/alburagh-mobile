@@ -4,11 +4,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
+import '../core/error_messages.dart';
 import '../core/theme/app_colors.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/cart_app_bar_action.dart';
 import '../widgets/product_card.dart';
 
@@ -159,9 +161,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
       if (!mounted) return;
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
+        AppSnackBar.error(
           context,
-        ).showSnackBar(SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')));
+          friendlyErrorMessage(e, fallback: 'تعذر تحميل المنتجات، حاول مرة أخرى'),
+        );
       }
     }
   }

@@ -6,6 +6,7 @@ import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/cart_item_card.dart';
 import 'main_screen.dart';
 
@@ -57,9 +58,7 @@ class _CartScreenState extends State<CartScreen> {
     if (confirmed == true) {
       await cart.clearCart();
       if (!mounted || cart.error != null) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تم تفريغ السلة')));
+      AppSnackBar.success(context, 'تم تفريغ السلة');
     }
   }
 
@@ -76,9 +75,7 @@ class _CartScreenState extends State<CartScreen> {
     final auth = context.read<AuthProvider>();
 
     if (!auth.isLoggedIn) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يجب تسجيل الدخول لإتمام الشراء')),
-      );
+      AppSnackBar.info(context, 'يجب تسجيل الدخول لإتمام الشراء');
       MainScreen.requestedTabIndex.value = MainScreen.profileTabIndex;
       return;
     }
@@ -106,9 +103,7 @@ class _CartScreenState extends State<CartScreen> {
       if (await canLaunchUrl(targetUri)) {
         await launchUrl(targetUri, mode: LaunchMode.externalApplication);
       } else if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تعذر فتح صفحة السلة')));
+        AppSnackBar.error(context, 'تعذر فتح صفحة السلة');
       }
     } finally {
       if (mounted) setState(() => _checkoutLoading = false);

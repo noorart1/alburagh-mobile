@@ -1,9 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../core/api_service.dart';
+import '../core/error_messages.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/category.dart';
+import '../widgets/app_snackbar.dart';
 import 'category_screen.dart';
 
 class AllCategoriesScreen extends StatefulWidget {
@@ -39,9 +41,10 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
       if (!mounted) return;
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
+        AppSnackBar.error(
           context,
-        ).showSnackBar(SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')));
+          friendlyErrorMessage(e, fallback: 'تعذر تحميل الأقسام، حاول مرة أخرى'),
+        );
       }
     }
   }

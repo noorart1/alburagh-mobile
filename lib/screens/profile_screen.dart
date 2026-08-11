@@ -9,10 +9,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
 import '../core/currency_utils.dart';
+import '../core/error_messages.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
 import 'pdf_viewer_screen.dart';
@@ -222,15 +224,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // this screen (or others) until the next full app restart.
         authProvider.setProfile(updated);
       } catch (e) {
-        errorMessage = 'تم الحفظ على الجهاز فقط، فشل التحديث في الحساب: $e';
+        errorMessage = friendlyErrorMessage(
+          e,
+          fallback: 'تم الحفظ على الجهاز فقط، تعذر تحديث الحساب، حاول مرة أخرى لاحقاً',
+        );
       }
     }
 
     if (!mounted) return;
     setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(errorMessage ?? 'تم حفظ معلومات الحساب')),
-    );
+    if (errorMessage != null) {
+      AppSnackBar.error(context, errorMessage);
+    } else {
+      AppSnackBar.success(context, 'تم حفظ معلومات الحساب');
+    }
   }
 
   Future<void> _pickAndUploadAvatar() async {
@@ -310,9 +317,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _readyAvatarUrls = avatars);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
+          AppSnackBar.error(
             context,
-          ).showSnackBar(SnackBar(content: Text('فشل تحميل الافاتارات: $e')));
+            friendlyErrorMessage(e, fallback: 'تعذر تحميل الصور، حاول مرة أخرى'),
+          );
         }
         return;
       }
@@ -382,9 +390,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return avatarUrl;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        AppSnackBar.error(
           context,
-        ).showSnackBar(SnackBar(content: Text('فشل تعيين الصورة: $e')));
+          friendlyErrorMessage(e, fallback: 'تعذر تعيين الصورة، حاول مرة أخرى'),
+        );
       }
       return null;
     } finally {
@@ -411,9 +420,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return avatarUrl;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        AppSnackBar.error(
           context,
-        ).showSnackBar(SnackBar(content: Text('فشل رفع الصورة: $e')));
+          friendlyErrorMessage(e, fallback: 'تعذر رفع الصورة، حاول مرة أخرى'),
+        );
       }
       return null;
     } finally {
@@ -482,9 +492,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final uri = Uri.tryParse(url);
     if (uri == null || !await canLaunchUrl(uri)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تعذر فتح الرابط')));
+      AppSnackBar.error(context, 'تعذر فتح الرابط');
       return;
     }
     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -891,12 +899,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         if (!dialogContext.mounted) return;
                         Navigator.pop(dialogContext);
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني',
-                            ),
-                          ),
+                        AppSnackBar.success(
+                          context,
+                          'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني',
                         );
                       } on DioException catch (e) {
                         setDialogState(() {

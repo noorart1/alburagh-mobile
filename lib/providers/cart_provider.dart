@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api_service.dart';
+import '../core/error_messages.dart';
 import '../models/product.dart';
 
 class CartItem {
@@ -99,7 +100,7 @@ class CartProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _isLoading = false;
-      _error = 'فشل تحميل السلة: $e';
+      _error = friendlyErrorMessage(e, fallback: 'تعذر تحميل السلة، حاول مرة أخرى');
       notifyListeners();
     }
   }
@@ -122,7 +123,10 @@ class CartProvider with ChangeNotifier {
       await loadCart();
       return true;
     } catch (e) {
-      _error = 'فشل إضافة المنتج للسلة: $e';
+      _error = friendlyErrorMessage(
+        e,
+        fallback: 'تعذر إضافة المنتج إلى السلة، حاول مرة أخرى',
+      );
       notifyListeners();
       return false;
     }
@@ -182,7 +186,10 @@ class CartProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _isLoading = false;
-      _error = 'فشل إزالة المنتج من السلة: $e';
+      _error = friendlyErrorMessage(
+        e,
+        fallback: 'تعذر إزالة المنتج من السلة، حاول مرة أخرى',
+      );
       notifyListeners();
       return false;
     }
@@ -211,7 +218,7 @@ class CartProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _isLoading = false;
-      _error = 'فشل تحديث الكمية: $e';
+      _error = friendlyErrorMessage(e, fallback: 'تعذر تحديث الكمية، حاول مرة أخرى');
       notifyListeners();
       return false;
     }
@@ -231,7 +238,7 @@ class CartProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _isLoading = false;
-      _error = 'فشل تفريغ السلة: $e';
+      _error = friendlyErrorMessage(e, fallback: 'تعذر تفريغ السلة، حاول مرة أخرى');
       notifyListeners();
     }
   }

@@ -1,16 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../core/api_service.dart';
+import '../core/error_messages.dart';
 import '../models/product.dart';
-
-String _describe(Object e) {
-  if (e is DioException) {
-    final status = e.response?.statusCode;
-    if (status != null) return 'خطأ من الخادم ($status)';
-    return 'تعذر الاتصال بالخادم';
-  }
-  return e.toString();
-}
 
 class WishlistProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -64,7 +55,7 @@ class WishlistProvider with ChangeNotifier {
     } catch (e) {
       if (requestId != _requestId) return;
       _isLoading = false;
-      _error = 'فشل تحميل المفضلة: ${_describe(e)}';
+      _error = friendlyErrorMessage(e, fallback: 'تعذر تحميل المفضلة، حاول مرة أخرى');
       notifyListeners();
     }
   }
@@ -94,7 +85,10 @@ class WishlistProvider with ChangeNotifier {
       // longer current -- applying it would mutate the new account's list.
       if (requestId != _requestId) return false;
       _items.removeWhere((p) => p.id == product.id);
-      _error = 'فشل إضافة المنتج إلى المفضلة: ${_describe(e)}';
+      _error = friendlyErrorMessage(
+        e,
+        fallback: 'تعذر إضافة المنتج إلى المفضلة، حاول مرة أخرى',
+      );
       notifyListeners();
       return false;
     }
@@ -118,7 +112,10 @@ class WishlistProvider with ChangeNotifier {
       // that's no longer the current one.
       if (requestId != _requestId) return false;
       _items.addAll(removed);
-      _error = 'فشل إزالة المنتج من المفضلة: ${_describe(e)}';
+      _error = friendlyErrorMessage(
+        e,
+        fallback: 'تعذر إزالة المنتج من المفضلة، حاول مرة أخرى',
+      );
       notifyListeners();
       return false;
     }

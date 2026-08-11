@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/app_snackbar.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -206,12 +207,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             );
                             if (success && mounted) {
                               Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'تم إنشاء الحساب وتسجيل الدخول بنجاح',
-                                  ),
-                                ),
+                              AppSnackBar.success(
+                                context,
+                                'تم إنشاء الحساب وتسجيل الدخول بنجاح',
                               );
                             }
                           },

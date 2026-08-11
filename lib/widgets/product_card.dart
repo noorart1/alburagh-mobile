@@ -8,6 +8,7 @@ import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/wishlist_provider.dart';
 import '../screens/product_detail_screen.dart';
+import 'app_snackbar.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -291,15 +292,9 @@ class _WishlistButton extends StatelessWidget {
       onTap: () async {
         final success = await context.read<WishlistProvider>().toggle(product);
         if (!context.mounted || success) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.read<WishlistProvider>().error ?? 'فشل تحديث المفضلة',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            backgroundColor: AppColors.error,
-          ),
+        AppSnackBar.error(
+          context,
+          context.read<WishlistProvider>().error ?? 'فشل تحديث المفضلة',
         );
       },
       child: Container(
@@ -348,16 +343,14 @@ class _CartButton extends StatelessWidget {
                 final cart = context.read<CartProvider>();
                 final success = await cart.addToCart(product);
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success
-                          ? 'تمت الإضافة إلى السلة'
-                          : cart.error ?? 'فشل إضافة المنتج للسلة',
-                    ),
-                    backgroundColor: success ? null : AppColors.error,
-                  ),
-                );
+                if (success) {
+                  AppSnackBar.success(context, 'تمت الإضافة إلى السلة');
+                } else {
+                  AppSnackBar.error(
+                    context,
+                    cart.error ?? 'فشل إضافة المنتج للسلة',
+                  );
+                }
               },
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,

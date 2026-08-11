@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_service.dart';
+import '../core/error_messages.dart';
 import '../core/secure_token_storage.dart';
 import '../models/user.dart';
 import 'cart_provider.dart'; // Import CartProvider
@@ -186,7 +187,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'خطأ غير متوقع: $e';
+      _error = friendlyErrorMessage(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -295,7 +296,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'خطأ غير متوقع: $e';
+      _error = friendlyErrorMessage(e);
       _isLoading = false;
       notifyListeners();
       return false;

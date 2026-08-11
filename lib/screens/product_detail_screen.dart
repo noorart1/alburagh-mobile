@@ -11,6 +11,7 @@ import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
 import '../providers/recently_viewed_provider.dart';
 import '../providers/wishlist_provider.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/product_card.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -219,19 +220,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       quantity: _quantity,
                                     );
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          success
-                                              ? 'تمت إضافة ${widget.product.name} إلى السلة'
-                                              : cart.error ??
-                                                    'فشل إضافة المنتج للسلة',
-                                        ),
-                                        backgroundColor: success
-                                            ? null
-                                            : AppColors.error,
-                                      ),
-                                    );
+                                    if (success) {
+                                      AppSnackBar.success(
+                                        context,
+                                        'تمت إضافة ${widget.product.name} إلى السلة',
+                                      );
+                                    } else {
+                                      AppSnackBar.error(
+                                        context,
+                                        cart.error ?? 'فشل إضافة المنتج للسلة',
+                                      );
+                                    }
                                   },
                             icon: const Icon(Icons.add_shopping_cart),
                             label: Text(
@@ -525,13 +524,9 @@ class _DetailWishlistButton extends StatelessWidget {
       onPressed: () async {
         final success = await context.read<WishlistProvider>().toggle(product);
         if (!context.mounted || success) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.read<WishlistProvider>().error ?? 'فشل تحديث المفضلة',
-            ),
-            backgroundColor: AppColors.error,
-          ),
+        AppSnackBar.error(
+          context,
+          context.read<WishlistProvider>().error ?? 'فشل تحديث المفضلة',
         );
       },
     );

@@ -7,6 +7,7 @@ import '../core/api_service.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/wishlist_provider.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/product_card.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -59,9 +60,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
       if (await canLaunchUrl(targetUri)) {
         await launchUrl(targetUri, mode: LaunchMode.externalApplication);
       } else if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تعذر فتح صفحة المفضلة')));
+        AppSnackBar.error(context, 'تعذر فتح صفحة المفضلة');
       }
     } finally {
       if (mounted) setState(() => _openLoading = false);
