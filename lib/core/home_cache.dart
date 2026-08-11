@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// On-device cache for HomeScreen's own sections (categories, banners, and
-/// each product row), so a reopened app can show the last-known content
-/// immediately instead of a blank/loading screen while the network catches
-/// up. Stores the raw JSON lists exactly as ApiService returns them (no
-/// model round-trip needed -- HomeScreen already parses them via
-/// Category.fromJson/Product.fromJson the same way whether the list came
-/// from cache or a fresh network response).
+/// On-device cache for screens that list categories/products/banners (home
+/// screen sections, a category's product grid, ...), so reopening one shows
+/// the last-known content immediately instead of a blank/loading screen
+/// while the network catches up. Stores the raw JSON lists exactly as
+/// ApiService returns them (no model round-trip needed -- callers already
+/// parse them via Category.fromJson/Product.fromJson the same way whether
+/// the list came from cache or a fresh network response).
 class HomeCache {
   HomeCache._();
 
