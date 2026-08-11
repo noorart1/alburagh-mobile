@@ -6,7 +6,9 @@ void main() {
   testWidgets('app renders its primary navigation', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp(initialCurrency: 'USD'));
+    await tester.pumpWidget(
+      const MyApp(initialCurrency: 'USD', showSplashLogo: false),
+    );
     // Lets the HomeScreen initState kicks off (categories, product
     // sections, cart) run to completion: the test environment's fake
     // HttpClient fails them immediately (see the "creates an HttpClient"
