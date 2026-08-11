@@ -434,6 +434,17 @@ return new WP_Error('missing_fields', 'Please fill out both username and passwor
 
 $user = wp_authenticate($username, $password);
 if (is_wp_error($user)) {
+// wp_authenticate() only matches user_login or user_email, never
+// user_nicename -- but accounts here register with the full email as
+// user_login while user_nicename is set to the short, human-friendly
+// local part (see register()). Fall back to a nicename lookup so
+// customers can log in with that shorter name too.
+$nicename_user = get_user_by('slug', $username);
+if ($nicename_user) {
+$user = wp_authenticate($nicename_user->user_login, $password);
+}
+}
+if (is_wp_error($user)) {
 return new WP_Error('invalid_credentials', 'Incorrect email or password.', array('status' => 401));
 }
 
@@ -516,8 +527,18 @@ if (is_wp_error($user_id)) {
 return new WP_Error('create_failed', 'Registration failed. Please try again.', array('status' => 500));
 }
 
+// The app registers accounts with the email address as the username, so
+// WordPress's default sanitize_title($user_login) turns the nicename into
+// a mangled slug like "huffman2244atomicmail-io" (the @ and . just get
+// stripped). Use the email's local part instead so the nicename stays
+// readable (e.g. "huffman2244"); wp_update_user()/wp_insert_user() still
+// dedupes it with a -2/-3 suffix if that slug is already taken.
+$email_local_part = strstr($email, '@', true);
+$nicename = sanitize_title($email_local_part !== false && $email_local_part !== '' ? $email_local_part : $username);
+
 wp_update_user(array(
 'ID' => $user_id,
+'user_nicename' => $nicename,
 'first_name' => $first_name,
 'last_name' => $last_name,
 'display_name' => $first_name . ' ' . $last_name
