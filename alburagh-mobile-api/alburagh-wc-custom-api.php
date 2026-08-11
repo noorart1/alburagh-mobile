@@ -822,6 +822,19 @@ $currency = $request->get_param('currency');
 return $currency ? strtoupper(sanitize_text_field($currency)) : 'USD';
 }
 
+// Splits a comma-separated query param into a sanitized, non-empty list --
+// used for the exclude_category_slugs/exclude_category_names params on
+// get_random_products(). Returns [] for a missing/blank param.
+private function parse_csv_param($raw, $sanitize_fn) {
+if (empty($raw)) {
+return array();
+}
+$values = array_map($sanitize_fn, explode(',', (string) $raw));
+return array_values(array_filter($values, function ($value) {
+return $value !== '';
+}));
+}
+
 public function get_products($request) {
 if (!class_exists('WooCommerce')) {
 return new WP_Error('wc_missing', 'WooCommerce is not active.', array('status' => 500));
@@ -914,6 +927,42 @@ $args = array(
 
 if ($exclude) {
 $args['post__not_in'] = array($exclude);
+}
+
+// The app hides a handful of non-merchandising categories everywhere else
+// it lists categories or products by category (uncategorized, PDF-only
+// items, subscription cards, offers -- see ApiService's
+// _hiddenCategorySlugs/_hiddenCategoryNames in the Flutter app, the single
+// source of truth for that list). Without this, a "you might also like"
+// suggestion here could still surface a product from one of those, even
+// though it's unreachable by browsing anywhere else in the app. The
+// caller passes the current hidden list rather than this endpoint keeping
+// its own separate copy of it.
+$exclude_slugs = $this->parse_csv_param($request->get_param('exclude_category_slugs'), 'sanitize_title');
+$exclude_names = $this->parse_csv_param($request->get_param('exclude_category_names'), 'sanitize_text_field');
+
+$tax_query = array();
+if (!empty($exclude_slugs)) {
+$tax_query[] = array(
+'taxonomy' => 'product_cat',
+'field'    => 'slug',
+'terms'    => $exclude_slugs,
+'operator' => 'NOT IN',
+);
+}
+if (!empty($exclude_names)) {
+$tax_query[] = array(
+'taxonomy' => 'product_cat',
+'field'    => 'name',
+'terms'    => $exclude_names,
+'operator' => 'NOT IN',
+);
+}
+if (!empty($tax_query)) {
+if (count($tax_query) > 1) {
+$tax_query['relation'] = 'AND';
+}
+$args['tax_query'] = $tax_query;
 }
 
 $query = new WP_Query($args);

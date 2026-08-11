@@ -116,6 +116,7 @@ class _CartScreenState extends State<CartScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: AppColors.background,
         title: Text('سلة المشتريات (${cart.itemCount})'),
         actions: [
           IconButton(

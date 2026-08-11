@@ -137,6 +137,13 @@ class ApiService {
         'count': count,
         'exclude': ?exclude,
         'currency': ?currency,
+        // Keeps "you might also like"-style random picks out of the same
+        // non-merchandising categories getCategories() already hides
+        // everywhere else in the app (uncategorized, PDF-only items,
+        // subscription cards, offers) -- without this a suggestion could
+        // surface a product that isn't reachable by browsing anywhere else.
+        'exclude_category_slugs': _hiddenCategorySlugs.join(','),
+        'exclude_category_names': _hiddenCategoryNames.join(','),
       },
     );
     return response.data is List ? List.from(response.data) : <dynamic>[];

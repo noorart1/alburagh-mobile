@@ -218,6 +218,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: AppColors.background,
         title: Text(widget.title ?? widget.category!.name),
         actions: const [CartAppBarAction()],
       ),

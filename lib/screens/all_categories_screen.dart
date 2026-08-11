@@ -56,7 +56,10 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('الأقسام')),
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        title: const Text('الأقسام'),
+      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
