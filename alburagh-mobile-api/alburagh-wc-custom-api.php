@@ -850,8 +850,8 @@ return $currency ? strtoupper(sanitize_text_field($currency)) : 'USD';
 }
 
 // Splits a comma-separated query param into a sanitized, non-empty list --
-// used for the exclude_category_slugs/exclude_category_names params on
-// get_random_products(). Returns [] for a missing/blank param.
+// used for the category_slugs param on get_random_products(). Returns []
+// for a missing/blank param.
 private function parse_csv_param($raw, $sanitize_fn) {
 if (empty($raw)) {
 return array();
@@ -956,40 +956,25 @@ if ($exclude) {
 $args['post__not_in'] = array($exclude);
 }
 
-// The app hides a handful of non-merchandising categories everywhere else
-// it lists categories or products by category (uncategorized, PDF-only
-// items, subscription cards, offers -- see ApiService's
-// _hiddenCategorySlugs/_hiddenCategoryNames in the Flutter app, the single
-// source of truth for that list). Without this, a "you might also like"
-// suggestion here could still surface a product from one of those, even
-// though it's unreachable by browsing anywhere else in the app. The
-// caller passes the current hidden list rather than this endpoint keeping
-// its own separate copy of it.
-$exclude_slugs = $this->parse_csv_param($request->get_param('exclude_category_slugs'), 'sanitize_title');
-$exclude_names = $this->parse_csv_param($request->get_param('exclude_category_names'), 'sanitize_text_field');
+// Restricted to the app's real merchandising categories (see ApiService's
+// _categoryOrder in the Flutter app, the single source of truth for that
+// list) rather than merely excluding the known non-merchandising ones --
+// a blacklist would silently let a "you might also like" suggestion here
+// surface a product from any future category the app hasn't been taught
+// to hide yet, even though it'd be unreachable by browsing anywhere else
+// in the app. The caller passes its current category list rather than
+// this endpoint keeping its own separate copy of it.
+$category_slugs = $this->parse_csv_param($request->get_param('category_slugs'), 'sanitize_title');
 
-$tax_query = array();
-if (!empty($exclude_slugs)) {
-$tax_query[] = array(
+if (!empty($category_slugs)) {
+$args['tax_query'] = array(
+array(
 'taxonomy' => 'product_cat',
 'field'    => 'slug',
-'terms'    => $exclude_slugs,
-'operator' => 'NOT IN',
+'terms'    => $category_slugs,
+'operator' => 'IN',
+),
 );
-}
-if (!empty($exclude_names)) {
-$tax_query[] = array(
-'taxonomy' => 'product_cat',
-'field'    => 'name',
-'terms'    => $exclude_names,
-'operator' => 'NOT IN',
-);
-}
-if (!empty($tax_query)) {
-if (count($tax_query) > 1) {
-$tax_query['relation'] = 'AND';
-}
-$args['tax_query'] = $tax_query;
 }
 
 $query = new WP_Query($args);
