@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -58,6 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isUploadingAvatar = false;
+  String _appVersion = '';
 
   // Preset avatars a user can pick instead of uploading their own photo,
   // fetched from the server (see ApiService.getReadyAvatars) rather than
@@ -74,6 +76,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() => _appVersion = '${info.version}+${info.buildNumber}');
   }
 
   @override
@@ -827,7 +836,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          _AppVersionLabel(version: _appVersion),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -1140,6 +1151,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            _AppVersionLabel(version: _appVersion),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -1148,6 +1162,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // ──────────────────────────────── Widgets ────────────────────────────────────
+
+class _AppVersionLabel extends StatelessWidget {
+  final String version;
+
+  const _AppVersionLabel({required this.version});
+
+  @override
+  Widget build(BuildContext context) {
+    if (version.isEmpty) return const SizedBox.shrink();
+    const style = TextStyle(color: AppColors.textMuted, fontSize: 12);
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('الإصدار ', style: style),
+          // The "1.2.0+6" run mixes digits with a neutral "+" and has no
+          // strong-direction character of its own, so under the app's
+          // forced RTL paragraph direction the Unicode bidi algorithm
+          // reorders it (e.g. "6+1.2.0") instead of reading left to right.
+          // Isolating it in its own LTR direction keeps it in source order.
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(version, style: style),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _ProfileHeader extends StatelessWidget {
   final String name;
