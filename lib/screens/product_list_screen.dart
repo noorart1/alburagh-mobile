@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/responsive_product_grid.dart';
 import '../models/product.dart';
 import '../widgets/cart_app_bar_action.dart';
 import '../widgets/product_card.dart';
@@ -26,18 +27,19 @@ class ProductListScreen extends StatelessWidget {
         title: Text(title),
         actions: const [CartAppBarAction()],
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 1,
-          mainAxisSpacing: 1,
-        ),
-        itemCount: products.length,
-        itemBuilder: (context, index) {
-          final product = products[index];
-          return ProductCard(key: ValueKey(product.id), product: product);
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: ResponsiveProductGrid.delegateForWidth(
+              constraints.maxWidth,
+            ),
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return ProductCard(key: ValueKey(product.id), product: product);
+            },
+          );
         },
       ),
     );

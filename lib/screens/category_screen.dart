@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
 import '../core/error_messages.dart';
 import '../core/home_cache.dart';
+import '../core/responsive_product_grid.dart';
 import '../core/theme/app_colors.dart';
 import '../models/category.dart';
 import '../models/product.dart';
@@ -328,50 +328,39 @@ class _CategoryScreenState extends State<CategoryScreen> {
                       slivers: [
                         SliverPadding(
                           padding: const EdgeInsets.all(16),
-                          sliver: SliverGrid(
-                            // SliverGridDelegateWithMaxCrossAxisExtent
-                            // rounds its column count *up* to stay
-                            // under the extent cap, which -- once
-                            // padding/spacing are subtracted from the
-                            // screen width -- often pushes a 2-column
-                            // fit to 3 columns and shrinks cards well
-                            // below 170. Computing the column count
-                            // ourselves with floor() instead guarantees
-                            // each column is at least 170, matching the
-                            // home screen's row cards, at the cost of
-                            // some leftover trailing width on screens
-                            // that aren't an exact multiple of 170.
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: math.max(
-                                    1,
-                                    ((MediaQuery.sizeOf(context).width - 32) /
-                                            171)
-                                        .floor(),
-                                  ),
-                                  childAspectRatio: 170 / 290,
-                                  crossAxisSpacing: 1,
-                                  mainAxisSpacing: 1,
-                                ),
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final product = filteredProducts[index];
-                              // Keyed by product id (not position) so
-                              // sorting/search swaps the underlying
-                              // list without tearing down and
-                              // rebuilding every card's element --
-                              // Flutter just moves the existing
-                              // element (and its already-resolved
-                              // image state) to its new index
-                              // instead of re-resolving images that
-                              // didn't actually change.
-                              return ProductCard(
-                                key: ValueKey(product.id),
-                                product: product,
+                          // SliverLayoutBuilder here sees crossAxisExtent
+                          // already reduced by the SliverPadding above, so
+                          // the column count is computed from the grid's
+                          // real available width, not the raw screen width.
+                          sliver: SliverLayoutBuilder(
+                            builder: (context, constraints) {
+                              return SliverGrid(
+                                gridDelegate:
+                                    ResponsiveProductGrid.delegateForWidth(
+                                      constraints.crossAxisExtent,
+                                      horizontalPadding: 0,
+                                    ),
+                                delegate: SliverChildBuilderDelegate((
+                                  context,
+                                  index,
+                                ) {
+                                  final product = filteredProducts[index];
+                                  // Keyed by product id (not position) so
+                                  // sorting/search swaps the underlying
+                                  // list without tearing down and
+                                  // rebuilding every card's element --
+                                  // Flutter just moves the existing
+                                  // element (and its already-resolved
+                                  // image state) to its new index
+                                  // instead of re-resolving images that
+                                  // didn't actually change.
+                                  return ProductCard(
+                                    key: ValueKey(product.id),
+                                    product: product,
+                                  );
+                                }, childCount: filteredProducts.length),
                               );
-                            }, childCount: filteredProducts.length),
+                            },
                           ),
                         ),
                         if (isLoadingMore)
@@ -411,29 +400,29 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 }
 
-/// Matches the real grid's column math/spacing (see the comment on the real
-/// SliverGrid above) so there's no layout jump when real content replaces
-/// this.
+/// Matches the real grid's column math/spacing (via the same
+/// [ResponsiveProductGrid] helper) so there's no layout jump when real
+/// content replaces this.
 class _CategoryGridSkeleton extends StatelessWidget {
   const _CategoryGridSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    final crossAxisCount = math.max(
-      1,
-      ((MediaQuery.sizeOf(context).width - 32) / 171).floor(),
-    );
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        childAspectRatio: 170 / 290,
-        crossAxisSpacing: 1,
-        mainAxisSpacing: 1,
-      ),
-      itemCount: crossAxisCount * 3,
-      itemBuilder: (context, index) =>
-          const SkeletonBox(width: 170, height: 290),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = ResponsiveProductGrid.columnCountForWidth(
+          constraints.maxWidth,
+        );
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: ResponsiveProductGrid.delegateForWidth(
+            constraints.maxWidth,
+          ),
+          itemCount: crossAxisCount * 3,
+          itemBuilder: (context, index) =>
+              const SkeletonBox(width: 170, height: 290),
+        );
+      },
     );
   }
 }

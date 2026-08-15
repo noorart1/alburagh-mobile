@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
+import '../core/responsive_product_grid.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/wishlist_provider.dart';
@@ -136,25 +135,21 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
     return RefreshIndicator(
       onRefresh: wishlist.loadWishlist,
-      child: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        // Fixed column count computed with floor() (not a plain 2-column
-        // split) so every card is the same 170x290 size the home screen's
-        // rows use -- see CategoryScreen's grid for why a 2-column split
-        // stretches cards to an inconsistent, distorting shape instead.
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: math.max(
-            1,
-            ((MediaQuery.sizeOf(context).width - 32) / 171).floor(),
-          ),
-          childAspectRatio: 170 / 290,
-          crossAxisSpacing: 1,
-          mainAxisSpacing: 1,
-        ),
-        itemCount: wishlist.items.length,
-        itemBuilder: (context, index) {
-          final product = wishlist.items[index];
-          return ProductCard(key: ValueKey(product.id), product: product);
+      // Same ResponsiveProductGrid helper CategoryScreen uses, so the same
+      // screen width always produces the same column count on both screens.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: ResponsiveProductGrid.delegateForWidth(
+              constraints.maxWidth,
+            ),
+            itemCount: wishlist.items.length,
+            itemBuilder: (context, index) {
+              final product = wishlist.items[index];
+              return ProductCard(key: ValueKey(product.id), product: product);
+            },
+          );
         },
       ),
     );

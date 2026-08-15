@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
+import '../core/responsive_product_grid.dart';
 import '../core/theme/app_colors.dart';
 import '../models/product.dart';
 import '../providers/currency_provider.dart';
@@ -120,18 +121,22 @@ class _SearchScreenState extends State<SearchScreen> {
             )
           else
             Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.75,
-                  crossAxisSpacing: 1,
-                  mainAxisSpacing: 1,
-                ),
-                itemCount: _products.length,
-                itemBuilder: (context, index) {
-                  final product = _products[index];
-                  return ProductCard(key: ValueKey(product.id), product: product);
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: ResponsiveProductGrid.delegateForWidth(
+                      constraints.maxWidth,
+                    ),
+                    itemCount: _products.length,
+                    itemBuilder: (context, index) {
+                      final product = _products[index];
+                      return ProductCard(
+                        key: ValueKey(product.id),
+                        product: product,
+                      );
+                    },
+                  );
                 },
               ),
             ),
