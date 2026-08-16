@@ -5,7 +5,7 @@
          triggers the runtime prompt for this. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="alburagh_app"
+        android:label="البراق للأطفال"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

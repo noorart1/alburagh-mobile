@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:160864816610:android:f76faaa9315fdbfd7ffdbb",
+        "mobilesdk_app_id": "1:160864816610:android:7d2e8e2f95dc9e7e7ffdbb",
         "android_client_info": {
-          "package_name": "com.alburagh.webapp"
+          "package_name": "com.alburagh.siteapp"
         }
       },
       "oauth_client": [
