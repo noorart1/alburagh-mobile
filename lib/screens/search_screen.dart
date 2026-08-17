@@ -101,7 +101,7 @@ class _SearchScreenState extends State<SearchScreen> {
               onChanged: _onChanged,
               decoration: const InputDecoration(
                 hintText: 'ابحث عن منتج...',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(Icons.search, size: 50),
               ),
             ),
           ),

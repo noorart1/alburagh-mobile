@@ -1375,6 +1375,13 @@ $site_host = wp_parse_url(home_url(), PHP_URL_HOST);
 $redirect_host = wp_parse_url($requested_redirect, PHP_URL_HOST);
 $redirect_to = ($redirect_host && $redirect_host === $site_host) ? $requested_redirect : home_url('/');
 
+// Carry the app's selected currency over to the website via VillaTheme
+// CURCY's own "wmc-currency" URL param, so checkout shows the same
+// currency (and the matching fixed _wmcp price) the app was showing.
+$requested_currency = isset($params['currency']) ? strtoupper(sanitize_text_field($params['currency'])) : 'USD';
+$currency = in_array($requested_currency, array('USD', 'IQD'), true) ? $requested_currency : 'USD';
+$redirect_to = add_query_arg('wmc-currency', $currency, $redirect_to);
+
 $login_token = bin2hex(random_bytes(32));
 set_transient('alburagh_autologin_' . $login_token, $user_id, 5 * MINUTE_IN_SECONDS);
 
@@ -1387,6 +1394,29 @@ home_url('/')
 );
 
 return new WP_REST_Response(array('url' => $login_url), 200);
+}
+}
+
+// Lets the app pick a sensible default currency before the user ever
+// touches a switcher, using the same IP geolocation WooCommerce itself
+// ships with (WC_Geolocation, MaxMind-backed) rather than a second
+// GeoIP integration -- consistent with how CURCY already auto-detects
+// currency for website visitors.
+class AlBuragh_API_Geo_Controller {
+public function detect_currency($request) {
+$country = '';
+
+if (class_exists('WC_Geolocation')) {
+$location = WC_Geolocation::geolocate_ip('', true, true);
+$country = isset($location['country']) ? strtoupper($location['country']) : '';
+}
+
+$currency = ($country === 'IQ') ? 'IQD' : 'USD';
+
+return new WP_REST_Response(
+array('country' => $country, 'currency' => $currency),
+200
+);
 }
 }
 
@@ -2325,6 +2355,7 @@ add_action('rest_api_init', function () {
 $auth = new AlBuragh_API_Auth_Controller();
 $prod = new AlBuragh_API_Product_Controller();
 $autologin = new AlBuragh_API_AutoLogin_Controller();
+$geo = new AlBuragh_API_Geo_Controller();
 $cart = new AlBuragh_API_Cart_Controller();
 $wishlist = new AlBuragh_API_Wishlist_Controller();
 $review = new AlBuragh_API_Review_Controller();
@@ -2442,6 +2473,12 @@ register_rest_route('alburagh/v1', '/banners', array(
 register_rest_route('alburagh/v1', '/auto-login-link', array(
 'methods' => 'POST',
 'callback' => array($autologin, 'create_link'),
+'permission_callback' => '__return_true'
+));
+
+register_rest_route('alburagh/v1', '/detect-currency', array(
+'methods' => 'GET',
+'callback' => array($geo, 'detect_currency'),
 'permission_callback' => '__return_true'
 ));
 

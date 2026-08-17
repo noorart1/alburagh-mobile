@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'core/deep_link_service.dart';
 import 'core/push_notifications.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_radius.dart';
@@ -58,6 +59,11 @@ void main() async {
   runApp(
     MyApp(initialCurrency: initialCurrency, showSplashLogo: showSplashLogo),
   );
+  // Deliberately not awaited, same reasoning as PushNotifications.init()
+  // above: this only needs to be ready by the time a checkout Custom Tab
+  // could realistically return with a link, which is always well after
+  // first frame.
+  unawaited(DeepLinkService.init(MyApp.navigatorKey));
 }
 
 // Only Android 12+'s native SplashScreen API is unable to show the app's
@@ -85,6 +91,13 @@ class MyApp extends StatelessWidget {
     required this.initialCurrency,
     required this.showSplashLogo,
   });
+
+  // The app's root Navigator, kept accessible outside the widget tree the
+  // same way MainScreen.requestedTabIndex already is -- DeepLinkService
+  // needs it to push OrderDetailScreen regardless of which tab/screen is
+  // currently showing when the checkout return link arrives.
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +137,7 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'دار البراق',
         locale: const Locale('ar'),
         supportedLocales: const [Locale('ar'), Locale('fa'), Locale('en')],

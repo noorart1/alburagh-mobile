@@ -417,18 +417,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          CachedNetworkImage(
-                            imageUrl:
-                                'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
-                            height: 32,
-                            fit: BoxFit.contain,
-                          ),
-                          const _CurrencySwitcher(),
-                        ],
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: CachedNetworkImage(
+                          imageUrl:
+                              'https://alburagh.com/wp-content/uploads/2021/07/d7.png',
+                          height: 32,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                       const SizedBox(height: 14),
                       const _HomeSearchBar(),
@@ -1045,7 +1041,7 @@ class _HomeSearchBarState extends State<_HomeSearchBar> {
           decoration: const InputDecoration(
             hintText: 'ابحث عن المنتجات والفئات...',
             hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
-            prefixIcon: Icon(Icons.search, color: AppColors.textMuted),
+            prefixIcon: Icon(Icons.search, color: AppColors.textMuted, size: 50),
             // Keeps the icon's tap/visual box a fixed, centered size
             // regardless of how tight contentPadding gets, so it stays
             // clearly and consistently aligned with the hint text.
@@ -1181,68 +1177,3 @@ class _SuggestionsPanel extends StatelessWidget {
   }
 }
 
-class _CurrencySwitcher extends StatelessWidget {
-  const _CurrencySwitcher();
-
-  @override
-  Widget build(BuildContext context) {
-    final currency = context.watch<CurrencyProvider>().currency;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: AppRadius.mdRadius,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _CurrencyOption(
-            label: 'USD',
-            selected: currency == 'USD',
-            onTap: () => context.read<CurrencyProvider>().setCurrency('USD'),
-          ),
-          _CurrencyOption(
-            label: 'IQD',
-            selected: currency == 'IQD',
-            onTap: () => context.read<CurrencyProvider>().setCurrency('IQD'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CurrencyOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CurrencyOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.mdRadius,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : Colors.transparent,
-          borderRadius: AppRadius.mdRadius,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: selected ? Colors.white : AppColors.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}

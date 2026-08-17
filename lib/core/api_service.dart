@@ -412,13 +412,25 @@ class ApiService {
   Future<String?> createAutoLoginLink({
     required String token,
     required String redirectTo,
+    required String currency,
   }) async {
     final response = await _dio.post(
       'auto-login-link',
-      data: {'redirect_to': redirectTo},
+      data: {'redirect_to': redirectTo, 'currency': currency},
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
     return response.data is Map ? response.data['url'] as String? : null;
+  }
+
+  /// Server-side IP geolocation (WooCommerce's own `WC_Geolocation`, the
+  /// same MaxMind data CURCY itself uses) so the app can default to IQD for
+  /// Iraq-based customers and USD everywhere else, without a client-side
+  /// GeoIP dependency. Returns null on any failure so callers can fall back
+  /// to the last-known/persisted currency.
+  Future<String?> detectCurrency() async {
+    final response = await _dio.get('detect-currency');
+    final data = response.data;
+    return data is Map ? data['currency'] as String? : null;
   }
 
   /// Drops the WooCommerce session cookie so the next request starts a

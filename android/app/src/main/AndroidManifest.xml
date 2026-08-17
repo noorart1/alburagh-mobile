@@ -26,9 +26,35 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Flutter 3.24+'s own built-in deep-link auto-routing would
+                 otherwise compete with app_links (deep_link_service.dart)
+                 for the order-received intent-filter below; this hands that
+                 URI to app_links exclusively instead. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- WooCommerce checkout "return to app" hop: the Custom Tab
+                 opened for checkout (see cart_screen.dart) navigates here on
+                 successful order placement. autoVerify requires
+                 https://www.alburagh.com/.well-known/assetlinks.json to be
+                 published server-side; until then Android treats this as an
+                 unverified link and won't hand it to the app automatically. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="www.alburagh.com"
+                    android:pathPrefix="/checkout/order-received/"/>
+                <data
+                    android:scheme="https"
+                    android:host="alburagh.com"
+                    android:pathPrefix="/checkout/order-received/"/>
             </intent-filter>
         </activity>
         <!-- image_cropper's native crop UI; without registering it here,

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
 import '../core/currency_utils.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
+import '../providers/currency_provider.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/cart_item_card.dart';
 import 'main_screen.dart';
@@ -71,6 +72,14 @@ class _CartScreenState extends State<CartScreen> {
   /// Switching tabs (rather than pushing a login screen on top of the cart)
   /// keeps the cart visible underneath and reuses the login form Profile
   /// already shows to logged-out users.
+  ///
+  /// Opened in an Android Custom Tab (not the external Chrome app) so the
+  /// customer never fully leaves the app; cookies/session persist across the
+  /// checkout → gateway → order-received redirect chain the same as they
+  /// would in a real browser tab. If checkout succeeds, the order-received
+  /// page is a verified Android App Link (see AndroidManifest.xml) that
+  /// hands navigation back to this app -- see DeepLinkService -- which
+  /// closes the tab automatically.
   Future<void> _goToWebsiteCart() async {
     final auth = context.read<AuthProvider>();
 
@@ -90,6 +99,7 @@ class _CartScreenState extends State<CartScreen> {
           final url = await _api.createAutoLoginLink(
             token: token,
             redirectTo: _originalCartUri.toString(),
+            currency: context.read<CurrencyProvider>().currency,
           );
           if (url != null && url.isNotEmpty) {
             targetUri = Uri.parse(url);
@@ -100,10 +110,21 @@ class _CartScreenState extends State<CartScreen> {
         }
       }
 
-      if (await canLaunchUrl(targetUri)) {
-        await launchUrl(targetUri, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
-        AppSnackBar.error(context, 'تعذر فتح صفحة السلة');
+      if (!mounted) return;
+      final toolbarColor = Theme.of(context).colorScheme.surface;
+      try {
+        await launchUrl(
+          targetUri,
+          customTabsOptions: CustomTabsOptions(
+            colorSchemes: CustomTabsColorSchemes.defaults(
+              toolbarColor: toolbarColor,
+            ),
+            urlBarHidingEnabled: true,
+            showTitle: true,
+          ),
+        );
+      } catch (_) {
+        if (mounted) AppSnackBar.error(context, 'تعذر فتح صفحة السلة');
       }
     } finally {
       if (mounted) setState(() => _checkoutLoading = false);

@@ -5,6 +5,7 @@ import '../core/api_service.dart';
 import '../core/responsive_product_grid.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
+import '../providers/currency_provider.dart';
 import '../providers/wishlist_provider.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/product_card.dart';
@@ -47,6 +48,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
           final url = await _api.createAutoLoginLink(
             token: token,
             redirectTo: _originalWishlistUri.toString(),
+            currency: context.read<CurrencyProvider>().currency,
           );
           if (url != null && url.isNotEmpty) {
             targetUri = Uri.parse(url);

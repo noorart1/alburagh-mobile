@@ -260,7 +260,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   onChanged: _onSearchChanged,
                   decoration: InputDecoration(
                     hintText: 'ابحث في المنتجات...',
-                    prefixIcon: const Icon(Icons.search),
+                    prefixIcon: const Icon(Icons.search, size: 50),
                     suffixIcon: _isSearching
                         ? const Padding(
                             padding: EdgeInsets.all(12),
