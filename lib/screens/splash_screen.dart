@@ -37,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     if (!widget.showLogo) return;
-    Future.delayed(const Duration(milliseconds: 5000), () {
+    Future.delayed(const Duration(milliseconds: 3000), () {
       if (!mounted) return;
       setState(() => _showOverlay = false);
     });

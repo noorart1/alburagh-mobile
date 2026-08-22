@@ -76,3 +76,23 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
+
+// Copies the built release APK/AAB into a `release/` folder at the project
+// root (next to `android/`, `lib/`, etc.) so they don't have to be dug out
+// of Flutter's default build/app/outputs/ paths.
+tasks.register<Copy>("copyReleaseApk") {
+    from(layout.buildDirectory.dir("outputs/flutter-apk"))
+    include("*.apk")
+    into(rootProject.projectDir.resolve("../release"))
+}
+
+tasks.register<Copy>("copyReleaseBundle") {
+    from(layout.buildDirectory.dir("outputs/bundle/release"))
+    include("*.aab")
+    into(rootProject.projectDir.resolve("../release"))
+}
+
+afterEvaluate {
+    tasks.findByName("assembleRelease")?.finalizedBy("copyReleaseApk")
+    tasks.findByName("bundleRelease")?.finalizedBy("copyReleaseBundle")
+}

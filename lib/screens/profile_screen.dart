@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 import '../core/api_service.dart';
 import '../core/constants.dart';
 import '../core/currency_utils.dart';
@@ -499,12 +499,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.tryParse(url);
-    if (uri == null || !await canLaunchUrl(uri)) {
+    if (uri == null) {
       if (!mounted) return;
       AppSnackBar.error(context, 'تعذر فتح الرابط');
       return;
     }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final toolbarColor = Theme.of(context).colorScheme.surface;
+    try {
+      await launchUrl(
+        uri,
+        customTabsOptions: CustomTabsOptions(
+          colorSchemes: CustomTabsColorSchemes.defaults(
+            toolbarColor: toolbarColor,
+          ),
+          urlBarHidingEnabled: true,
+          showTitle: true,
+        ),
+      );
+    } catch (_) {
+      if (mounted) AppSnackBar.error(context, 'تعذر فتح الرابط');
+    }
   }
 
   void _openCatalog(String title, String url) {

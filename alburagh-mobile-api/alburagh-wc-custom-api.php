@@ -2346,6 +2346,95 @@ class AlBuragh_API_Debug_Controller {
       '_regular_price_wmcp'
     );
 
+    // CURCY (VillaTheme Multi Currency) has been replaced on this site by
+    // "WooCommerce Price Based on Country" (pricebasedcountry.com, class
+    // prefix WCPBC). That plugin stores its per-zone price override in
+    // post meta under a key built from the zone's name, not its currency
+    // code — e.g. get_post_meta($product_id) on a real product here came
+    // back with "_d8a7d984d8b9d8b1d8a7d982_price" (hex-encoded UTF-8 bytes
+    // of the Arabic zone name "العراق" = Iraq), alongside similar keys for
+    // "دول-الخليج" (Gulf countries) and "البحرين" (Bahrain) zones. Unlike
+    // CURCY's per-currency lookup, WCPBC's zone is normally resolved from
+    // the *visitor's* detected/selected country, not passed as a request
+    // param -- so before rewriting alburagh_get_fixed_price() for this
+    // plugin we need to see: (1) whether WCPBC exposes a PHP API to list
+    // zones/currencies and fetch a price for an explicit zone regardless of
+    // visitor location (the app needs to serve IQD prices to any visitor
+    // who picked IQD, not just ones WCPBC's own geolocation places in
+    // Iraq), and (2) the real stored value/format of that Iraq zone's
+    // price meta (flat override vs exchange-rate multiplier). This block
+    // is temporary instrumentation for that -- remove once the real
+    // WCPBC-based pricing path lands.
+    $result['wcpbc'] = array(
+      'WCPBC_class_exists' => class_exists('WCPBC'),
+      'WCPBC_function_exists' => function_exists('WCPBC'),
+      'wcpbc_get_zones_function_exists' => function_exists('wcpbc_get_zones'),
+      'wcpbc_get_zone_function_exists' => function_exists('wcpbc_get_zone'),
+      'wcpbc_get_base_currency_function_exists' => function_exists('wcpbc_get_base_currency'),
+    );
+
+    if (function_exists('wcpbc_get_base_currency')) {
+      try {
+        $result['wcpbc']['base_currency'] = wcpbc_get_base_currency();
+      } catch (\Throwable $e) {
+        $result['wcpbc']['base_currency_error'] = $e->getMessage();
+      }
+    }
+
+    if (function_exists('WCPBC')) {
+      try {
+        $wcpbc = WCPBC();
+        $result['wcpbc']['instance_class'] = is_object($wcpbc) ? get_class($wcpbc) : null;
+        if (is_object($wcpbc) && method_exists($wcpbc, 'get_zones')) {
+          $zones = $wcpbc->get_zones();
+          $zone_dump = array();
+          foreach ((array) $zones as $zone_id => $zone) {
+            $zone_info = array('zone_id' => $zone_id);
+            if (is_object($zone)) {
+              foreach (array('get_id', 'get_zone_name', 'get_currency', 'get_countries', 'get_exchange_rate', 'get_price_method') as $method) {
+                if (method_exists($zone, $method)) {
+                  try {
+                    $zone_info[$method] = $zone->$method();
+                  } catch (\Throwable $e) {
+                    $zone_info[$method . '_error'] = $e->getMessage();
+                  }
+                }
+              }
+            } else {
+              $zone_info['raw'] = $zone;
+            }
+            $zone_dump[] = $zone_info;
+          }
+          $result['wcpbc']['zones'] = $zone_dump;
+        }
+      } catch (\Throwable $e) {
+        $result['wcpbc']['instance_error'] = $e->getMessage();
+      }
+    }
+
+    // Known zone-name-derived meta key suffixes observed directly in
+    // product_all_meta_keys above (see comment block over this section) --
+    // dumping their raw values here rather than guessing whether the
+    // plugin stores a flat override, an exchange rate, or both.
+    if ($product_id) {
+      $known_zone_meta_suffixes = array(
+        'iraq' => 'd8a7d984d8b9d8b1d8a7d982',
+        'gulf_countries' => 'd8afd988d984-d8a7d984d8aed984d98ad8ac',
+        'bahrain' => 'd8a7d984d8a8d8add8b1d98ad986',
+      );
+      $zone_meta_dump = array();
+      foreach ($known_zone_meta_suffixes as $label => $suffix) {
+        $zone_meta_dump[$label] = array(
+          'meta_key_suffix' => $suffix,
+          'price' => get_post_meta($product_id, '_' . $suffix . '_price', true),
+          'regular_price' => get_post_meta($product_id, '_' . $suffix . '_regular_price', true),
+          'sale_price' => get_post_meta($product_id, '_' . $suffix . '_sale_price', true),
+          'price_method' => get_post_meta($product_id, '_' . $suffix . '_price_method', true),
+        );
+      }
+      $result['wcpbc']['zone_meta_for_product'] = $zone_meta_dump;
+    }
+
     return new WP_REST_Response($result, 200);
   }
 }
