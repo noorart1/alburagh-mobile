@@ -6,7 +6,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -35,10 +34,6 @@ void main() async {
   // images resident.
   PaintingBinding.instance.imageCache.maximumSizeBytes = 200 << 20; // 200MB
   PaintingBinding.instance.imageCache.maximumSize = 300;
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
   // Firebase Web needs a FirebaseOptions config (via `flutterfire configure`)
   // that this project doesn't have yet -- push notifications are
   // Android/iOS-only for now.

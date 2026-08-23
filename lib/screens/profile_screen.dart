@@ -342,37 +342,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'اختر افاتار جاهز',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 320,
-                child: GridView.builder(
-                  itemCount: avatars!.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemBuilder: (context, index) {
-                    final url = avatars![index];
-                    return GestureDetector(
-                      onTap: () => Navigator.pop(context, url),
-                      child: CircleAvatar(
-                        backgroundColor: AppColors.surfaceSoft,
-                        backgroundImage: CachedNetworkImageProvider(url),
-                      ),
-                    );
-                  },
+          // Wrapped in a scroll view (rather than shrinking the fixed
+          // 320px grid below) because on a landscape phone the whole
+          // sheet's available height can be shorter than that grid alone
+          // -- this way it scrolls instead of overflowing there, while
+          // staying visually identical on the taller portrait/tablet
+          // heights where it already fit.
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'اختر افاتار جاهز',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 320,
+                  child: GridView.builder(
+                    itemCount: avatars!.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    itemBuilder: (context, index) {
+                      final url = avatars![index];
+                      return GestureDetector(
+                        onTap: () => Navigator.pop(context, url),
+                        child: CircleAvatar(
+                          backgroundColor: AppColors.surfaceSoft,
+                          backgroundImage: CachedNetworkImageProvider(url),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

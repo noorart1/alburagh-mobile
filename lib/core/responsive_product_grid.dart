@@ -6,8 +6,9 @@ import 'package:flutter/widgets.dart';
 /// always produces the same column count everywhere instead of each screen
 /// rolling its own math.
 ///
-/// The app is portrait-only, so this only needs to scale with width, not
-/// device class/resolution/DPI.
+/// Driven entirely by the available width (not orientation or device
+/// class/resolution/DPI), so it already produces correct column counts in
+/// landscape and on tablets without any orientation-specific branching.
 class ResponsiveProductGrid {
   ResponsiveProductGrid._();
 

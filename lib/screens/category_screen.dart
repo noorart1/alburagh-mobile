@@ -250,131 +250,135 @@ class _CategoryScreenState extends State<CategoryScreen> {
         title: Text(widget.title ?? widget.category!.name),
         actions: const [CartAppBarAction()],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              children: [
-                TextField(
-                  onChanged: _onSearchChanged,
-                  decoration: InputDecoration(
-                    hintText: 'ابحث في المنتجات...',
-                    prefixIcon: const Icon(Icons.search, size: 50),
-                    suffixIcon: _isSearching
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildFilterChip('الأحدث', 'newest'),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
-                        'السعر: من الأقل إلى الأعلى',
-                        'price_low',
+      // A single CustomScrollView (rather than a fixed header Column above
+      // an Expanded scroll area) so the search/filter header scrolls away
+      // with the rest of the page instead of permanently occupying space.
+      // With a fixed header, landscape's much shorter viewport left barely
+      // more than one product row visible below it -- browsing meant
+      // constant small swipes just to see anything, since the header
+      // itself never shrank.
+      body: RefreshIndicator(
+        onRefresh: loadProducts,
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  children: [
+                    TextField(
+                      onChanged: _onSearchChanged,
+                      decoration: InputDecoration(
+                        hintText: 'ابحث في المنتجات...',
+                        prefixIcon: const Icon(Icons.search, size: 50),
+                        suffixIcon: _isSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
-                        'السعر: من الأعلى إلى الأقل',
-                        'price_high',
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildFilterChip('الأحدث', 'newest'),
+                          const SizedBox(width: 8),
+                          _buildFilterChip(
+                            'السعر: من الأقل إلى الأعلى',
+                            'price_low',
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChip(
+                            'السعر: من الأعلى إلى الأقل',
+                            'price_high',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (isLoading)
+              const SliverFillRemaining(child: _CategoryGridSkeleton())
+            else if (filteredProducts.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.shopping_bag_outlined,
+                        size: 48,
+                        color: AppColors.textMuted,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        searchQuery.isEmpty
+                            ? 'لم يتم العثور على منتجات'
+                            : 'لم يتم العثور على نتائج للبحث',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: isLoading
-                ? const _CategoryGridSkeleton()
-                : filteredProducts.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.shopping_bag_outlined,
-                          size: 48,
-                          color: AppColors.textMuted,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          searchQuery.isEmpty
-                              ? 'لم يتم العثور على منتجات'
-                              : 'لم يتم العثور على نتائج للبحث',
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: loadProducts,
-                    child: CustomScrollView(
-                      controller: _scrollController,
-                      slivers: [
-                        SliverPadding(
-                          padding: const EdgeInsets.all(16),
-                          // SliverLayoutBuilder here sees crossAxisExtent
-                          // already reduced by the SliverPadding above, so
-                          // the column count is computed from the grid's
-                          // real available width, not the raw screen width.
-                          sliver: SliverLayoutBuilder(
-                            builder: (context, constraints) {
-                              return SliverGrid(
-                                gridDelegate:
-                                    ResponsiveProductGrid.delegateForWidth(
-                                      constraints.crossAxisExtent,
-                                      horizontalPadding: 0,
-                                    ),
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
-                                  final product = filteredProducts[index];
-                                  // Keyed by product id (not position) so
-                                  // sorting/search swaps the underlying
-                                  // list without tearing down and
-                                  // rebuilding every card's element --
-                                  // Flutter just moves the existing
-                                  // element (and its already-resolved
-                                  // image state) to its new index
-                                  // instead of re-resolving images that
-                                  // didn't actually change.
-                                  return ProductCard(
-                                    key: ValueKey(product.id),
-                                    product: product,
-                                  );
-                                }, childCount: filteredProducts.length),
-                              );
-                            },
-                          ),
-                        ),
-                        if (isLoadingMore)
-                          const SliverToBoxAdapter(
-                            child: Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(child: CircularProgressIndicator()),
-                            ),
-                          ),
-                      ],
-                    ),
+              )
+            else ...[
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                // SliverLayoutBuilder here sees crossAxisExtent already
+                // reduced by the SliverPadding above, so the column count
+                // is computed from the grid's real available width, not
+                // the raw screen width.
+                sliver: SliverLayoutBuilder(
+                  builder: (context, constraints) {
+                    return SliverGrid(
+                      gridDelegate: ResponsiveProductGrid.delegateForWidth(
+                        constraints.crossAxisExtent,
+                        horizontalPadding: 0,
+                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final product = filteredProducts[index];
+                        // Keyed by product id (not position) so
+                        // sorting/search swaps the underlying list without
+                        // tearing down and rebuilding every card's element
+                        // -- Flutter just moves the existing element (and
+                        // its already-resolved image state) to its new
+                        // index instead of re-resolving images that
+                        // didn't actually change.
+                        return ProductCard(
+                          key: ValueKey(product.id),
+                          product: product,
+                        );
+                      }, childCount: filteredProducts.length),
+                    );
+                  },
+                ),
+              ),
+              if (isLoadingMore)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
-          ),
-        ],
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }
