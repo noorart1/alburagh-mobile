@@ -674,6 +674,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Personal Information Section
           _ProfileSection(
             title: 'المعلومات الشخصية',
+            icon: Icons.badge_outlined,
+            subtitle: 'الاسم ووسائل التواصل',
             children: [
               Form(
                 key: _formKey,
@@ -744,6 +746,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Address Section
           _ProfileSection(
             title: 'عنوان الشحن',
+            icon: Icons.local_shipping_outlined,
+            subtitle: 'يُستخدم عند إتمام الطلب',
             children: [
               _ProfileTextField(
                 controller: _address1Controller,
@@ -757,6 +761,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: 'الشقة / الدور / التفاصيل الإضافية',
                 icon: Icons.apartment_outlined,
                 textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Divider(color: AppColors.border),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      'تفاصيل الموقع',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Divider(color: AppColors.border),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Row(
@@ -819,6 +844,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           _ProfileSection(
             title: 'الحساب',
+            icon: Icons.account_circle_outlined,
             children: [
               _ProfileTile(
                 icon: Icons.favorite_border,
@@ -838,6 +864,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           _ProfileSection(
             title: 'الدعم',
+            icon: Icons.help_outline,
             children: [
               _ProfileTile(
                 icon: Icons.support_agent,
@@ -1398,52 +1425,105 @@ class _ProfileTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      maxLines: maxLines,
-      validator: validator,
-      enabled: enabled,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      ),
+    // A static label above the field (rather than Material's floating
+    // labelText, which sits inside the border and only moves up on
+    // focus/fill) so the field's purpose is visible at a glance instead
+    // of overlapping the box.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          maxLines: maxLines,
+          validator: validator,
+          enabled: enabled,
+          // No border override here -- the app's shared
+          // InputDecorationTheme (see main.dart's ThemeData) already
+          // defines the filled background and border colors for every
+          // field in the app; overriding it here just made this screen's
+          // fields look subtly different from every other input (search
+          // bars, login form, etc).
+          decoration: InputDecoration(prefixIcon: Icon(icon)),
+        ),
+      ],
     );
   }
 }
 
 class _ProfileSection extends StatelessWidget {
   final String title;
+  final IconData? icon;
+  final String? subtitle;
   final List<Widget> children;
 
-  const _ProfileSection({required this.title, required this.children});
+  const _ProfileSection({
+    required this.title,
+    this.icon,
+    this.subtitle,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              ...children,
-            ],
-          ),
+    // Uses the app's own CardTheme (elevation, radius, surface color) so
+    // this matches every other card-style surface in the app instead of
+    // the flat bordered box it used to be.
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: AppColors.surfaceSoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 18, color: primaryColor),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...children,
+          ],
         ),
       ),
     );
