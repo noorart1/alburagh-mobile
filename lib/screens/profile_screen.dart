@@ -18,6 +18,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/country_picker_field.dart';
 import 'cart_screen.dart';
+import 'orders_screen.dart';
 import 'pdf_viewer_screen.dart';
 import 'register_screen.dart';
 import 'wishlist_screen.dart';
@@ -846,6 +847,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: 'الحساب',
             icon: Icons.account_circle_outlined,
             children: [
+              _ProfileTile(
+                icon: Icons.receipt_long_outlined,
+                title: 'الطلبات',
+                subtitle: 'تتبع طلباتك السابقة',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const OrdersScreen(),
+                    ),
+                  );
+                },
+              ),
               _ProfileTile(
                 icon: Icons.favorite_border,
                 title: 'المفضلة',
