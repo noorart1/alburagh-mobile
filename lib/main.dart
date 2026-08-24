@@ -235,6 +235,42 @@ class MyApp extends StatelessWidget {
         backgroundColor: AppColors.white,
         type: BottomNavigationBarType.fixed,
       ),
+      // Applies to every existing `MaterialPageRoute` push across the app
+      // (none of them override buildTransitions themselves) without
+      // touching any of those call sites or the routing architecture
+      // itself -- just a subtle fade + short upward slide on the incoming
+      // page instead of each platform's default transition.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _FadeSlideUpPageTransitionsBuilder(),
+          TargetPlatform.iOS: _FadeSlideUpPageTransitionsBuilder(),
+        },
+      ),
+    );
+  }
+}
+
+class _FadeSlideUpPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _FadeSlideUpPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.04),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
+import '../core/motion.dart';
 import '../core/responsive_product_grid.dart';
 import '../core/theme/app_colors.dart';
 import '../models/product.dart';
@@ -105,41 +106,49 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: CircularProgressIndicator(),
-            )
-          else if (_products.isEmpty)
-            const Expanded(
-              child: Center(
-                child: Text(
-                  'اكتب كلمة بحث لعرض النتائج',
-                  style: TextStyle(color: AppColors.textMuted),
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: ResponsiveProductGrid.delegateForWidth(
-                      constraints.maxWidth,
+          Expanded(
+            // Reserving this space via Expanded (rather than the loading
+            // spinner being a shrink-wrapped Padding, as it was before)
+            // means switching in/out of the loading state no longer
+            // shifts the rest of the layout -- combined with
+            // AnimatedSwitcher, it's now a smooth in-place fade instead of
+            // a pop and a jump.
+            child: AnimatedSwitcher(
+              duration: resolveMotion(context, Motion.loadingCrossfade),
+              child: _isLoading
+                  ? const Center(
+                      key: ValueKey('loading'),
+                      child: CircularProgressIndicator(),
+                    )
+                  : _products.isEmpty
+                  ? const Center(
+                      key: ValueKey('empty'),
+                      child: Text(
+                        'اكتب كلمة بحث لعرض النتائج',
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
+                    )
+                  : LayoutBuilder(
+                      key: const ValueKey('content'),
+                      builder: (context, constraints) {
+                        return GridView.builder(
+                          padding: const EdgeInsets.all(16),
+                          gridDelegate: ResponsiveProductGrid.delegateForWidth(
+                            constraints.maxWidth,
+                          ),
+                          itemCount: _products.length,
+                          itemBuilder: (context, index) {
+                            final product = _products[index];
+                            return ProductCard(
+                              key: ValueKey(product.id),
+                              product: product,
+                            );
+                          },
+                        );
+                      },
                     ),
-                    itemCount: _products.length,
-                    itemBuilder: (context, index) {
-                      final product = _products[index];
-                      return ProductCard(
-                        key: ValueKey(product.id),
-                        product: product,
-                      );
-                    },
-                  );
-                },
-              ),
             ),
+          ),
         ],
       ),
     );

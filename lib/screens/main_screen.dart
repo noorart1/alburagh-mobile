@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../core/motion.dart';
 import '../providers/cart_provider.dart';
 import '../providers/wishlist_provider.dart';
 import 'home_screen.dart';
@@ -69,10 +70,7 @@ class _MainScreenState extends State<MainScreen> {
 
   List<BottomNavigationBarItem> _buildItems(int cartCount, int wishlistCount) {
     return [
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.home),
-        label: 'الرئيسية',
-      ),
+      const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
       BottomNavigationBarItem(
         icon: _badgedIcon(Icons.shopping_cart, cartCount),
         label: 'السلة',
@@ -88,7 +86,15 @@ class _MainScreenState extends State<MainScreen> {
   Widget _badgedIcon(IconData icon, int count) {
     return Badge(
       isLabelVisible: count > 0,
-      label: Text(count > 99 ? '99+' : '$count'),
+      // Keyed on the count so a change swaps in a fresh Text that scales
+      // in from small -- a subtle "bump" confirming the cart/wishlist
+      // actually updated, rather than the number silently changing.
+      label: AnimatedSwitcher(
+        duration: resolveMotion(context, Motion.badgeBump),
+        transitionBuilder: (child, animation) =>
+            ScaleTransition(scale: animation, child: child),
+        child: Text(count > 99 ? '99+' : '$count', key: ValueKey(count)),
+      ),
       child: Icon(icon),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 import 'package:provider/provider.dart';
 import '../core/api_service.dart';
 import '../core/currency_utils.dart';
+import '../core/motion.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
@@ -155,7 +156,10 @@ class _CartScreenState extends State<CartScreen> {
             ),
         ],
       ),
-      body: _buildBody(cart),
+      body: AnimatedSwitcher(
+        duration: resolveMotion(context, Motion.loadingCrossfade),
+        child: _buildBody(cart),
+      ),
       bottomNavigationBar: cart.items.isEmpty || cart.isLoading
           ? null
           : SafeArea(
@@ -215,11 +219,15 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildBody(CartProvider cart) {
     if (cart.isLoading && cart.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        key: ValueKey('loading'),
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (cart.error != null && cart.items.isEmpty) {
       return Center(
+        key: const ValueKey('error'),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -242,6 +250,7 @@ class _CartScreenState extends State<CartScreen> {
 
     if (cart.items.isEmpty) {
       return RefreshIndicator(
+        key: const ValueKey('empty'),
         onRefresh: cart.loadCart,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -260,6 +269,7 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     return RefreshIndicator(
+      key: const ValueKey('list'),
       onRefresh: cart.loadCart,
       child: ListView.separated(
         padding: const EdgeInsets.all(12),

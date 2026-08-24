@@ -9,12 +9,14 @@ import 'package:provider/provider.dart';
 import '../core/api_service.dart';
 import '../core/currency_utils.dart';
 import '../core/home_cache.dart';
+import '../core/motion.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/currency_provider.dart';
+import '../widgets/fade_slide_in.dart';
 import '../widgets/product_card.dart';
 import '../widgets/skeleton_box.dart';
 import 'category_screen.dart';
@@ -455,157 +457,191 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      SizedBox(
-                        // Just the circle now (60 + its border) --
-                        // the name/count text below it was removed.
-                        height: 76,
-                        child: categoriesLoading
-                            ? ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                                itemCount: 6,
-                                itemBuilder: (context, index) => Padding(
-                                  padding: const EdgeInsets.all(6.0),
-                                  child: SkeletonBox(
-                                    width: 60,
-                                    height: 60,
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                                itemCount: categories.length,
-                                itemBuilder: (context, index) {
-                                  final cat = categories[index];
-                                  return Padding(
-                                    padding: const EdgeInsets.all(6.0),
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                CategoryScreen(category: cat),
-                                          ),
-                                        );
-                                      },
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 30,
-                                            backgroundColor:
-                                                AppColors.surfaceSoft,
-                                            // CachedNetworkImageProvider
-                                            // (vs. plain NetworkImage) gives
-                                            // this a disk cache, so the same
-                                            // category icon isn't
-                                            // re-downloaded every time the
-                                            // home screen is reopened.
-                                            backgroundImage:
-                                                cat.imageUrl.isNotEmpty
-                                                ? CachedNetworkImageProvider(
-                                                    cat.imageUrl,
-                                                  )
-                                                : null,
-                                            child: cat.imageUrl.isEmpty
-                                                ? Icon(
-                                                    Icons.category,
-                                                    color:
-                                                        AppColors
-                                                            .categoryAccents[index %
-                                                            AppColors
-                                                                .categoryAccents
-                                                                .length],
-                                                    size: 25,
-                                                  )
-                                                : null,
-                                          ),
-                                        ],
+                      FadeSlideIn(
+                        child: SizedBox(
+                          // Just the circle now (60 + its border) --
+                          // the name/count text below it was removed.
+                          height: 76,
+                          child: AnimatedSwitcher(
+                            duration: resolveMotion(
+                              context,
+                              Motion.loadingCrossfade,
+                            ),
+                            child: categoriesLoading
+                                ? ListView.builder(
+                                    key: const ValueKey('categories-skeleton'),
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
+                                    itemCount: 6,
+                                    itemBuilder: (context, index) => Padding(
+                                      padding: const EdgeInsets.all(6.0),
+                                      child: SkeletonBox(
+                                        width: 60,
+                                        height: 60,
+                                        borderRadius: BorderRadius.circular(30),
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
+                                  )
+                                : ListView.builder(
+                                    key: const ValueKey('categories-content'),
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
+                                    itemCount: categories.length,
+                                    itemBuilder: (context, index) {
+                                      final cat = categories[index];
+                                      return Padding(
+                                        padding: const EdgeInsets.all(6.0),
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    CategoryScreen(
+                                                      category: cat,
+                                                    ),
+                                              ),
+                                            );
+                                          },
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 30,
+                                                backgroundColor:
+                                                    AppColors.surfaceSoft,
+                                                // CachedNetworkImageProvider
+                                                // (vs. plain NetworkImage) gives
+                                                // this a disk cache, so the same
+                                                // category icon isn't
+                                                // re-downloaded every time the
+                                                // home screen is reopened.
+                                                backgroundImage:
+                                                    cat.imageUrl.isNotEmpty
+                                                    ? CachedNetworkImageProvider(
+                                                        cat.imageUrl,
+                                                      )
+                                                    : null,
+                                                child: cat.imageUrl.isEmpty
+                                                    ? Icon(
+                                                        Icons.category,
+                                                        color:
+                                                            AppColors
+                                                                .categoryAccents[index %
+                                                                AppColors
+                                                                    .categoryAccents
+                                                                    .length],
+                                                        size: 25,
+                                                      )
+                                                    : null,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
                       ),
-                      _buildSection(
-                        title: 'السلاسل القصصية',
-                        products: collectionsProducts,
-                        loading: collectionsLoading,
-                        seeMoreBuilder: collectionsCategory != null
-                            ? (context) =>
-                                  CategoryScreen(category: collectionsCategory)
-                            : null,
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 40),
+                        child: _buildSection(
+                          title: 'السلاسل القصصية',
+                          products: collectionsProducts,
+                          loading: collectionsLoading,
+                          seeMoreBuilder: collectionsCategory != null
+                              ? (context) => CategoryScreen(
+                                  category: collectionsCategory,
+                                )
+                              : null,
+                        ),
                       ),
-                      _buildSection(
-                        title: 'الكتب المصورة',
-                        products: featuredBooksProducts,
-                        loading: featuredBooksLoading,
-                        // Prefer the matching "الكتب المصورة" category so
-                        // "more" browses that category specifically;
-                        // only fall back to the whole catalog if no such
-                        // category exists on the backend.
-                        seeMoreBuilder: featuredBooksCategory != null
-                            ? (context) => CategoryScreen(
-                                category: featuredBooksCategory,
-                              )
-                            : (context) =>
-                                  const CategoryScreen(title: 'كل الكتب'),
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 80),
+                        child: _buildSection(
+                          title: 'الكتب المصورة',
+                          products: featuredBooksProducts,
+                          loading: featuredBooksLoading,
+                          // Prefer the matching "الكتب المصورة" category so
+                          // "more" browses that category specifically;
+                          // only fall back to the whole catalog if no such
+                          // category exists on the backend.
+                          seeMoreBuilder: featuredBooksCategory != null
+                              ? (context) => CategoryScreen(
+                                  category: featuredBooksCategory,
+                                )
+                              : (context) =>
+                                    const CategoryScreen(title: 'كل الكتب'),
+                        ),
                       ),
-                      _buildSection(
-                        title: 'الكتب التعليمية',
-                        products: educationalBooksProducts,
-                        loading: educationalBooksLoading,
-                        seeMoreBuilder: educationalBooksCategory != null
-                            ? (context) => CategoryScreen(
-                                category: educationalBooksCategory,
-                              )
-                            : null,
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 120),
+                        child: _buildSection(
+                          title: 'الكتب التعليمية',
+                          products: educationalBooksProducts,
+                          loading: educationalBooksLoading,
+                          seeMoreBuilder: educationalBooksCategory != null
+                              ? (context) => CategoryScreen(
+                                  category: educationalBooksCategory,
+                                )
+                              : null,
+                        ),
                       ),
-                      _buildSection(
-                        title: 'الألعاب التعليمية',
-                        products: intellectualGamesProducts,
-                        loading: intellectualGamesLoading,
-                        seeMoreBuilder: intellectualGamesCategory != null
-                            ? (context) => CategoryScreen(
-                                category: intellectualGamesCategory,
-                              )
-                            : null,
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 160),
+                        child: _buildSection(
+                          title: 'الألعاب التعليمية',
+                          products: intellectualGamesProducts,
+                          loading: intellectualGamesLoading,
+                          seeMoreBuilder: intellectualGamesCategory != null
+                              ? (context) => CategoryScreen(
+                                  category: intellectualGamesCategory,
+                                )
+                              : null,
+                        ),
                       ),
-                      _buildSection(
-                        title: 'الكتب الدينية',
-                        products: religiousProducts,
-                        loading: religiousLoading,
-                        seeMoreBuilder: religiousCategory != null
-                            ? (context) =>
-                                  CategoryScreen(category: religiousCategory)
-                            : null,
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 200),
+                        child: _buildSection(
+                          title: 'الكتب الدينية',
+                          products: religiousProducts,
+                          loading: religiousLoading,
+                          seeMoreBuilder: religiousCategory != null
+                              ? (context) =>
+                                    CategoryScreen(category: religiousCategory)
+                              : null,
+                        ),
                       ),
-                      _buildSection(
-                        title: 'الكتب التراثية',
-                        products: heritageBooksProducts,
-                        loading: heritageBooksLoading,
-                        seeMoreBuilder: heritageBooksCategory != null
-                            ? (context) => CategoryScreen(
-                                category: heritageBooksCategory,
-                              )
-                            : null,
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 240),
+                        child: _buildSection(
+                          title: 'الكتب التراثية',
+                          products: heritageBooksProducts,
+                          loading: heritageBooksLoading,
+                          seeMoreBuilder: heritageBooksCategory != null
+                              ? (context) => CategoryScreen(
+                                  category: heritageBooksCategory,
+                                )
+                              : null,
+                        ),
                       ),
-                      _buildSection(
-                        title: 'تنمية المهارات',
-                        products: skillsDevelopmentProducts,
-                        loading: skillsDevelopmentLoading,
-                        seeMoreBuilder: skillsDevelopmentCategory != null
-                            ? (context) => CategoryScreen(
-                                category: skillsDevelopmentCategory,
-                              )
-                            : null,
+                      FadeSlideIn(
+                        delay: const Duration(milliseconds: 280),
+                        child: _buildSection(
+                          title: 'تنمية المهارات',
+                          products: skillsDevelopmentProducts,
+                          loading: skillsDevelopmentLoading,
+                          seeMoreBuilder: skillsDevelopmentCategory != null
+                              ? (context) => CategoryScreen(
+                                  category: skillsDevelopmentCategory,
+                                )
+                              : null,
+                        ),
                       ),
                       const SizedBox(height: 16),
                     ],
@@ -677,26 +713,30 @@ class _HomeScreenState extends State<HomeScreen> {
         Container(
           height: 290,
           color: const Color(0xFFF9C900),
-          child: loading
-              ? const _ProductSectionSkeleton()
-              : ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 0), //4
-                      child: SizedBox(
-                        width: 170,
-                        child: ProductCard(
-                          key: ValueKey(product.id),
-                          product: product,
+          child: AnimatedSwitcher(
+            duration: resolveMotion(context, Motion.loadingCrossfade),
+            child: loading
+                ? const _ProductSectionSkeleton(key: ValueKey('skeleton'))
+                : ListView.builder(
+                    key: const ValueKey('content'),
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: products.length,
+                    itemBuilder: (context, index) {
+                      final product = products[index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 0), //4
+                        child: SizedBox(
+                          width: 170,
+                          child: ProductCard(
+                            key: ValueKey(product.id),
+                            product: product,
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
+          ),
         ),
       ],
     );
@@ -707,7 +747,7 @@ class _HomeScreenState extends State<HomeScreen> {
 /// horizontal padding) so the layout doesn't jump when real content
 /// replaces it.
 class _ProductSectionSkeleton extends StatelessWidget {
-  const _ProductSectionSkeleton();
+  const _ProductSectionSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -776,18 +816,24 @@ class _BannerCarouselState extends State<_BannerCarousel> {
     if (_bannerImageUrls.isEmpty) {
       return const SizedBox.shrink();
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Computed directly in pixels rather than via CarouselOptions.aspectRatio
-        // (which derives height from width divided by a ratio applied to the
-        // *carousel's* width, not each item's) -- with viewportFraction at 1.0
-        // each item's width already equals the full available width, so this
-        // is just availableWidth / imageAspectRatio, guaranteeing the item
-        // box's ratio matches the source image's exactly. BoxFit.cover then
-        // has nothing to crop or stretch.
-        final bannerHeight = constraints.maxWidth / _imageAspectRatio;
-        return _buildCarousel(bannerHeight);
-      },
+    // This point is only ever reached once banner URLs have actually
+    // arrived, so FadeSlideIn here animates in exactly once when the
+    // banner is genuinely ready -- not on the empty placeholder frame
+    // above.
+    return FadeSlideIn(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Computed directly in pixels rather than via CarouselOptions.aspectRatio
+          // (which derives height from width divided by a ratio applied to the
+          // *carousel's* width, not each item's) -- with viewportFraction at 1.0
+          // each item's width already equals the full available width, so this
+          // is just availableWidth / imageAspectRatio, guaranteeing the item
+          // box's ratio matches the source image's exactly. BoxFit.cover then
+          // has nothing to crop or stretch.
+          final bannerHeight = constraints.maxWidth / _imageAspectRatio;
+          return _buildCarousel(bannerHeight);
+        },
+      ),
     );
   }
 
@@ -1041,7 +1087,11 @@ class _HomeSearchBarState extends State<_HomeSearchBar> {
           decoration: const InputDecoration(
             hintText: 'ابحث عن المنتجات والفئات...',
             hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
-            prefixIcon: Icon(Icons.search, color: AppColors.textMuted, size: 50),
+            prefixIcon: Icon(
+              Icons.search,
+              color: AppColors.textMuted,
+              size: 50,
+            ),
             // Keeps the icon's tap/visual box a fixed, centered size
             // regardless of how tight contentPadding gets, so it stays
             // clearly and consistently aligned with the hint text.
@@ -1176,4 +1226,3 @@ class _SuggestionsPanel extends StatelessWidget {
     );
   }
 }
-

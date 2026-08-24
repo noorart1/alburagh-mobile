@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_service.dart';
+import '../core/motion.dart';
 import '../core/responsive_product_grid.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
@@ -84,17 +85,24 @@ class _WishlistScreenState extends State<WishlistScreen> {
           ),
         ],
       ),
-      body: _buildBody(wishlist),
+      body: AnimatedSwitcher(
+        duration: resolveMotion(context, Motion.loadingCrossfade),
+        child: _buildBody(wishlist),
+      ),
     );
   }
 
   Widget _buildBody(WishlistProvider wishlist) {
     if (wishlist.isLoading && wishlist.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        key: ValueKey('loading'),
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (wishlist.error != null && wishlist.items.isEmpty) {
       return Center(
+        key: const ValueKey('error'),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -117,6 +125,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
     if (wishlist.items.isEmpty) {
       return RefreshIndicator(
+        key: const ValueKey('empty'),
         onRefresh: wishlist.loadWishlist,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -136,6 +145,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     }
 
     return RefreshIndicator(
+      key: const ValueKey('content'),
       onRefresh: wishlist.loadWishlist,
       // Same ResponsiveProductGrid helper CategoryScreen uses, so the same
       // screen width always produces the same column count on both screens.

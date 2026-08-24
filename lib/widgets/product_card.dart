@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/currency_utils.dart';
+import '../core/motion.dart';
 import '../core/theme/app_colors.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
@@ -10,141 +11,159 @@ import '../providers/wishlist_provider.dart';
 import '../screens/product_detail_screen.dart';
 import 'app_snackbar.dart';
 
-class ProductCard extends StatelessWidget {
+class ProductCard extends StatefulWidget {
   final Product product;
 
   const ProductCard({super.key, required this.product});
 
   @override
+  State<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<ProductCard> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final product = widget.product;
     final price = double.tryParse(product.price) ?? 0;
     final regularPrice = double.tryParse(product.regularPrice) ?? 0;
     final hasDiscount = regularPrice > price;
 
-    return Card(
-      color: AppColors.white,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductDetailScreen(product: product),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // No flex ratio here on purpose: the details Padding below
-            // sizes itself to exactly what its content needs (name +
-            // optional discount + button row), and the image takes 100%
-            // of whatever's left. That's strictly more image space than
-            // any fixed flex split could give it, on every card size/
-            // aspect ratio, with no risk of re-introducing the overflow a
-            // fixed ratio caused before.
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Hero(
-                      tag: 'product_${product.id}',
-                      child: Container(
-                        color: AppColors.white,
-                        child: product.thumbnailUrl.isEmpty
-                            ? Icon(
-                                Icons.image_not_supported,
-                                color: AppColors.textMuted,
-                                size: 42,
-                              )
-                            : _ProductImage(imageUrl: product.thumbnailUrl),
+    return AnimatedScale(
+      scale: _pressed ? 0.97 : 1.0,
+      duration: resolveMotion(context, Motion.pressScale),
+      curve: Curves.easeOut,
+      child: Card(
+        color: AppColors.white,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          // onHighlightChanged (not a second GestureDetector) so the press
+          // scale layers onto this InkWell's own gesture arena instead of
+          // competing with it -- onTap/ripple/navigation stay exactly as
+          // they were.
+          onHighlightChanged: (value) => setState(() => _pressed = value),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProductDetailScreen(product: product),
+              ),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // No flex ratio here on purpose: the details Padding below
+              // sizes itself to exactly what its content needs (name +
+              // optional discount + button row), and the image takes 100%
+              // of whatever's left. That's strictly more image space than
+              // any fixed flex split could give it, on every card size/
+              // aspect ratio, with no risk of re-introducing the overflow a
+              // fixed ratio caused before.
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Hero(
+                        tag: 'product_${product.id}',
+                        child: Container(
+                          color: AppColors.white,
+                          child: product.thumbnailUrl.isEmpty
+                              ? Icon(
+                                  Icons.image_not_supported,
+                                  color: AppColors.textMuted,
+                                  size: 42,
+                                )
+                              : _ProductImage(imageUrl: product.thumbnailUrl),
+                        ),
                       ),
                     ),
-                  ),
-                  if (!product.inStock)
-                    Positioned(
-                      top: 6,
-                      left: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.textMuted,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'نفذ من المخزون',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.white,
+                    if (!product.inStock)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.textMuted,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'نفذ من المخزون',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.white,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      height: 1.2,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (hasDiscount)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Text(
-                      CurrencyUtils.formatString(
-                        product.regularPrice,
-                        product.currencySymbol,
-                      ),
-                      maxLines: 1,
+                      product.name,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                        decoration: TextDecoration.lineThrough,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        height: 1.2,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          CurrencyUtils.formatString(
-                            product.price,
-                            product.currencySymbol,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
+                    const SizedBox(height: 4),
+                    if (hasDiscount)
+                      Text(
+                        CurrencyUtils.formatString(
+                          product.regularPrice,
+                          product.currencySymbol,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                          decoration: TextDecoration.lineThrough,
                         ),
                       ),
-                      _WishlistButton(product: product),
-                      const SizedBox(width: 6),
-                      _CartButton(product: product),
-                    ],
-                  ),
-                ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            CurrencyUtils.formatString(
+                              product.price,
+                              product.currencySymbol,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        _WishlistButton(product: product),
+                        const SizedBox(width: 6),
+                        _CartButton(product: product),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -264,11 +283,8 @@ class _ProductImageState extends State<_ProductImage> {
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
-      errorWidget: (context, url, error) => Icon(
-        Icons.broken_image,
-        color: AppColors.textMuted,
-        size: 42,
-      ),
+      errorWidget: (context, url, error) =>
+          Icon(Icons.broken_image, color: AppColors.textMuted, size: 42),
     );
   }
 }

@@ -8,7 +8,9 @@ String orderStatusLabel(String status) {
     case 'pending':
       return 'قيد الانتظار';
     case 'processing':
-      return 'قيد التجهيز';
+      // Matches the website's own wording exactly (my-account/orders and
+      // my-account/view-order both show "قيد التنفيذ" for this status).
+      return 'قيد التنفيذ';
     case 'on-hold':
       return 'قيد التعليق';
     case 'completed':
