@@ -15,7 +15,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.0+3
+version: 1.3.0+4
 
 environment:
   sdk: ^3.12.2
@@ -86,7 +86,15 @@ flutter_native_splash:
   ios_content_mode: scaleAspectFit
   android: true
   ios: true
-  fullscreen: true
+  # fullscreen: true previously made flutter_native_splash emit the legacy
+  # android:windowFullscreen/windowDrawsSystemBarBackgrounds/
+  # windowLayoutInDisplayCutoutMode attributes on LaunchTheme to hide system
+  # bars during the native splash. That's the deprecated fullscreen
+  # mechanism Google Play's Android 15/16 edge-to-edge checks flag ("Show to
+  # the Edge" APIs "permanently disabled") -- FlutterActivity already
+  # enables real edge-to-edge automatically for this app's targetSdk, and
+  # the actual splash image is the Flutter-rendered SplashScreen overlay
+  # (lib/screens/splash_screen.dart), so the native theme doesn't need it.
   # Android 12+'s native SplashScreen API has no full-bleed raw-image mode
   # at all -- its only image slot (windowSplashScreenAnimatedIcon) is
   # always rendered small and masked inside an icon-shaped safe zone by
