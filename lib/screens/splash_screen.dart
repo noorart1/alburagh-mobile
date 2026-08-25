@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/motion.dart';
 import 'main_screen.dart';
 
 /// MainScreen is built right away underneath this, with the splash drawn
@@ -33,19 +32,12 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   late bool _showOverlay = widget.showLogo;
-  bool _logoVisible = false;
 
   @override
   void initState() {
     super.initState();
     if (!widget.showLogo) return;
-    // Flips one frame after the first (invisible) frame paints, so the
-    // fade/scale-in is actually visible instead of the logo just
-    // appearing already at full opacity/scale on the very first frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _logoVisible = true);
-    });
-    Future.delayed(const Duration(milliseconds: 3000), () {
+    Future.delayed(const Duration(milliseconds: 4000), () {
       if (!mounted) return;
       setState(() => _showOverlay = false);
     });
@@ -56,41 +48,15 @@ class _SplashScreenState extends State<SplashScreen> {
     return Stack(
       children: [
         const MainScreen(),
-        // Positioned.fill wraps AnimatedSwitcher itself (not the other way
-        // around) -- AnimatedSwitcher's default transition wraps whatever
-        // child it's given in a FadeTransition, so a Positioned passed as
-        // that child ends up with FadeTransition as its parent instead of
-        // this Stack, which Positioned can't work with.
-        Positioned.fill(
-          // AnimatedSwitcher (rather than the overlay just disappearing
-          // the instant _showOverlay flips) fades MainScreen into view
-          // smoothly instead of a hard cut.
-          child: AnimatedSwitcher(
-            duration: resolveMotion(context, Motion.overlayFade),
-            child: _showOverlay
-                ? Scaffold(
-                    key: const ValueKey('splash-overlay'),
-                    backgroundColor: Colors.white,
-                    body: Center(
-                      child: AnimatedOpacity(
-                        opacity: _logoVisible ? 1 : 0,
-                        duration: resolveMotion(context, Motion.splash),
-                        curve: Curves.easeOut,
-                        child: AnimatedScale(
-                          scale: _logoVisible ? 1.0 : 0.9,
-                          duration: resolveMotion(context, Motion.splash),
-                          curve: Curves.easeOut,
-                          child: const Image(
-                            image: AssetImage('Assets/logo.png'),
-                            width: 200,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(key: ValueKey('splash-gone')),
+        if (_showOverlay)
+          Positioned.fill(
+            child: Scaffold(
+              backgroundColor: Colors.white,
+              body: Center(
+                child: Image(image: AssetImage('Assets/logo.png'), width: 200),
+              ),
+            ),
           ),
-        ),
       ],
     );
   }
