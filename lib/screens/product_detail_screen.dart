@@ -13,6 +13,7 @@ import '../providers/recently_viewed_provider.dart';
 import '../providers/wishlist_provider.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/product_card.dart';
+import '../widgets/share_product_sheet.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -98,7 +99,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         title: Text(widget.product.name),
-        actions: [_DetailWishlistButton(product: widget.product)],
+        actions: [
+          IconButton(
+            tooltip: 'مشاركة',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () => showShareProductSheet(context, widget.product),
+          ),
+          _DetailWishlistButton(product: widget.product),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(

@@ -95,5 +95,13 @@
             <category android:name="android.intent.category.BROWSABLE"/>
             <data android:scheme="http"/>
         </intent>
+        <!-- Required so url_launcher's canLaunchUrl() can find a mail app
+             for the product-detail share sheet's email option, same
+             Android 11+ package-visibility reasoning as the https/http
+             entries above. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="mailto"/>
+        </intent>
     </queries>
 </manifest>
